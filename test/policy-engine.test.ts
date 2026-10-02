@@ -44,6 +44,38 @@ describe("PolicyEngine.fromBundle", () => {
   });
 });
 
+describe("PolicyEngine.loadCached", () => {
+  it("re-reads the pointer every time but parses the bundle only when the active version changes", async () => {
+    const reads: string[] = [];
+    const objects: Record<string, string> = {
+      "policies/ACTIVE": "v1",
+      "policies/v1/bundle.json": JSON.stringify({ version: "v1", files: { "a.rego": ALLOW } }),
+      "policies/v2/bundle.json": JSON.stringify({ version: "v2", files: { "a.rego": ALLOW } }),
+    };
+    const s: PolicyStore = {
+      async get(key) {
+        reads.push(key);
+        const v = objects[key];
+        return v === undefined ? null : { text: async () => v };
+      },
+    };
+    const first = await PolicyEngine.loadCached({ POLICIES: s });
+    const second = await PolicyEngine.loadCached({ POLICIES: s });
+    expect(second).toBe(first);
+    expect(reads.filter((k) => k === "policies/v1/bundle.json")).toHaveLength(1);
+    expect(reads.filter((k) => k === "policies/ACTIVE")).toHaveLength(2);
+
+    objects["policies/ACTIVE"] = "v2"; // a new policy was published: no redeploy needed, agents pick it up
+    const third = await PolicyEngine.loadCached({ POLICIES: s });
+    expect(third.version).toBe("v2");
+    expect(third).not.toBe(first);
+  });
+
+  it("still throws PolicyUnavailableError when nothing is published", async () => {
+    await expect(PolicyEngine.loadCached({ POLICIES: store({}) })).rejects.toBeInstanceOf(PolicyUnavailableError);
+  });
+});
+
 describe("PolicyEngine.load (Review Focus 1: never a silent pass)", () => {
   it("rejects when policies/ACTIVE is missing", async () => {
     await expect(PolicyEngine.load({ POLICIES: store({}) })).rejects.toBeInstanceOf(PolicyUnavailableError);

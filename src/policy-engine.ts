@@ -8,6 +8,7 @@
 import { Engine, initSync } from "../vendor/regorus/regorusjs.js";
 
 let ready = false;
+let cached: PolicyEngine | undefined;
 
 /** Call once at startup. Workers pass the statically imported module; Node tests pass bytes. */
 export function initRegorus(module: WebAssembly.Module | BufferSource): void {
@@ -60,13 +61,16 @@ export class PolicyEngine {
     return new PolicyEngine(engine, bundle.version);
   }
 
-  /** Reads `policies/ACTIVE` then that version's bundle. Throws PolicyUnavailableError — never returns an empty engine. */
-  static async load(env: { POLICIES: PolicyStore }): Promise<PolicyEngine> {
+  /** Reads the active version pointer. Throws PolicyUnavailableError when nothing is published. */
+  private static async activeVersion(env: { POLICIES: PolicyStore }): Promise<string> {
     const pointer = await env.POLICIES.get(ACTIVE_KEY);
     if (!pointer) throw new PolicyUnavailableError(`No active policy bundle (${ACTIVE_KEY} is missing)`);
     const version = (await pointer.text()).trim();
     if (!version) throw new PolicyUnavailableError(`${ACTIVE_KEY} is empty`);
+    return version;
+  }
 
+  private static async loadVersion(env: { POLICIES: PolicyStore }, version: string): Promise<PolicyEngine> {
     const object = await env.POLICIES.get(bundleKey(version));
     if (!object) throw new PolicyUnavailableError(`Policy bundle ${bundleKey(version)} not found`);
 
@@ -81,6 +85,22 @@ export class PolicyEngine {
       throw new PolicyUnavailableError(`Policy bundle ${version} has no "files" map`);
     }
     return PolicyEngine.fromBundle({ version, files });
+  }
+
+  /** Reads `policies/ACTIVE` then that version's bundle. Throws PolicyUnavailableError — never returns an empty engine. */
+  static async load(env: { POLICIES: PolicyStore }): Promise<PolicyEngine> {
+    return PolicyEngine.loadVersion(env, await PolicyEngine.activeVersion(env));
+  }
+
+  /**
+   * Like `load`, but parses a bundle only when the active version changes. The pointer is re-read on every call (it is tiny),
+   * so publishing a new bundle reaches running agents without a redeploy; an unchanged version reuses the parsed engine.
+   */
+  static async loadCached(env: { POLICIES: PolicyStore }): Promise<PolicyEngine> {
+    const version = await PolicyEngine.activeVersion(env);
+    if (cached?.version === version) return cached;
+    cached = await PolicyEngine.loadVersion(env, version);
+    return cached;
   }
 
   /** Evaluate a Rego query (e.g. `data.committee.privacy.deny`). Undefined rules give `value: undefined`. */
