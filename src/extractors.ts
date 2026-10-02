@@ -1,0 +1,214 @@
+/**
+ * Deterministic fact extractors (HEURISTIC). They read only ADDED lines of a diff and return plain facts; they never
+ * judge. Rego policies decide what the facts mean. Keeping extraction and judgement apart is what makes a verdict
+ * explainable: you can read the facts, then read the rule.
+ *
+ * Limits are intentional and documented in the README: single-line patterns, added lines only, JS/TS-leaning.
+ */
+import type { DiffFile } from "./diff";
+
+export interface FactSite {
+  file: string;
+  detail: string;
+}
+
+const clip = (s: string, n = 90) => s.trim().replace(/\s+/g, " ").slice(0, n);
+const isDoc = (p: string) => /\.(md|mdx|txt|rst)$/i.test(p) || /(^|\/)(package-lock\.json|yarn\.lock|pnpm-lock\.yaml)$/.test(p);
+const isUi = (p: string) => /\.(tsx|jsx|html?|vue|svelte)$/i.test(p);
+
+export function changedPaths(files: DiffFile[]): string[] {
+  return files.map((f) => f.path);
+}
+
+/**
+ * Remove string-literal text so `console.log("Email sent")` is not mistaken for logging an email. Template literals keep
+ * their `${...}` expressions, because `\`${user.email}\`` really does log the email.
+ */
+function stripLiterals(line: string): string {
+  return line
+    .replace(/`([^`]*)`/g, (_m, inner: string) => (inner.match(/\$\{[^}]*\}/g) ?? []).join(" "))
+    .replace(/"(?:[^"\\]|\\.)*"/g, '""')
+    .replace(/'(?:[^'\\]|\\.)*'/g, "''");
+}
+
+const LOG_CALL = /\b(console\.(log|info|warn|error|debug|trace)|logger\.\w+|log\.(info|warn|error|debug|trace)|logging\.\w+|println?|System\.out\.print\w*)\s*\(/i;
+
+function logSites(files: DiffFile[], identifier: RegExp): FactSite[] {
+  const out: FactSite[] = [];
+  for (const f of files) {
+    if (isDoc(f.path)) continue;
+    for (const line of f.added) {
+      if (LOG_CALL.test(line) && identifier.test(stripLiterals(line))) out.push({ file: f.path, detail: clip(line) });
+    }
+  }
+  return out;
+}
+
+// ---------- privacy ----------
+
+const PII = /e-?mail|passw(or)?d|\bssn\b|social.?security|phone|mobile.?number|birth|\bdob\b|passport|(first|last|full).?name|street|postal.?code|zip.?code|home.?address|ip.?addr/i;
+
+export function extractPiiLogging(files: DiffFile[]): FactSite[] {
+  return logSites(files, PII);
+}
+
+const TRACKERS: [string, RegExp][] = [
+  ["posthog", /posthog(-js)?['"]|posthog\.(init|capture|identify)/i],
+  ["google-analytics", /\bgtag\s*\(|googletagmanager\.com|\bga\s*\(\s*['"]create/],
+  ["mixpanel", /mixpanel\.(init|track)/i],
+  ["amplitude", /amplitude\.(init|getInstance)|@amplitude\//i],
+  ["facebook-pixel", /\bfbq\s*\(/],
+  ["hotjar", /hotjar/i],
+  ["segment", /\banalytics\.(load|identify|track|page)\s*\(/],
+  ["matomo", /_paq\.push/],
+];
+const CONSENT = /(has|get|check|require|await)?_?consent|cookie.?consent|cookie.?banner|\bopt[-_ ]?in\b|gdpr/i;
+
+export function extractTrackers(files: DiffFile[]): { file: string; name: string; consent_gated: boolean }[] {
+  const out: { file: string; name: string; consent_gated: boolean }[] = [];
+  for (const f of files) {
+    if (isDoc(f.path)) continue;
+    const text = f.added.join("\n");
+    for (const [name, re] of TRACKERS) {
+      if (re.test(text)) out.push({ file: f.path, name, consent_gated: CONSENT.test(text) });
+    }
+  }
+  return out;
+}
+
+const KNOWN_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0", "www.w3.org", "w3.org", "schema.org", "json-schema.org", "github.com", "raw.githubusercontent.com", "example.com", "example.org", "example.net"]);
+
+export function extractNewHosts(files: DiffFile[]): { file: string; host: string }[] {
+  const out: { file: string; host: string }[] = [];
+  for (const f of files) {
+    if (isDoc(f.path)) continue;
+    const seen = new Set<string>();
+    for (const line of f.added) {
+      for (const m of line.matchAll(/https?:\/\/([a-z0-9][a-z0-9.-]*\.[a-z]{2,})(?::\d+)?/gi)) {
+        const host = m[1].toLowerCase().replace(/\.+$/, "");
+        if (KNOWN_HOSTS.has(host) || seen.has(host)) continue;
+        seen.add(host);
+        out.push({ file: f.path, host });
+      }
+    }
+  }
+  return out;
+}
+
+// ---------- CASL ----------
+
+const SENDS_EMAIL = /nodemailer|sendgrid|sgMail|mailgun|postmark|resend\.emails|\bses\.send|sendMail\s*\(|sendEmail\s*\(|\.emails?\.send\s*\(|EMAIL\.send/i;
+
+export function extractEmailSenders(files: DiffFile[]): { file: string; has_unsubscribe: boolean; has_consent_evidence: boolean; has_sender_identity: boolean }[] {
+  const out = [];
+  for (const f of files) {
+    if (isDoc(f.path)) continue;
+    const text = f.added.join("\n");
+    if (!SENDS_EMAIL.test(text)) continue;
+    out.push({
+      file: f.path,
+      has_unsubscribe: /unsubscribe|list-unsubscribe/i.test(text),
+      has_consent_evidence: /consent|opt[-_ ]?in|subscribed_at|double.?opt/i.test(text),
+      has_sender_identity: /mailing.?address|physical.?address|company.?address|sender.?(name|address)|from_?name/i.test(text),
+    });
+  }
+  return out;
+}
+
+// ---------- sensitive data ----------
+
+const TEST_PANS = new Set(["4242424242424242", "4111111111111111", "5555555555554444", "378282246310005", "6011111111111117", "5105105105105100", "4012888888881881", "3530111333300000", "30569309025904"]);
+
+function luhn(digits: string): boolean {
+  let sum = 0;
+  let dbl = false;
+  for (let i = digits.length - 1; i >= 0; i--) {
+    let n = digits.charCodeAt(i) - 48;
+    if (dbl) {
+      n *= 2;
+      if (n > 9) n -= 9;
+    }
+    sum += n;
+    dbl = !dbl;
+  }
+  return sum % 10 === 0;
+}
+
+const CARD_FIELD = /card.?(number|num)\b|\bcvv\b|\bcvc\b|\bpan\b|credit.?card|cardNumber/i;
+
+export function extractCardData(files: DiffFile[]): FactSite[] {
+  const out = logSites(files, CARD_FIELD);
+  for (const f of files) {
+    if (isDoc(f.path)) continue;
+    for (const line of f.added) {
+      for (const m of line.matchAll(/\b(?:\d[ -]?){13,19}\b/g)) {
+        const digits = m[0].replace(/[ -]/g, "");
+        if (digits.length < 13 || digits.length > 19) continue;
+        if (!/^[2-6]/.test(digits) || TEST_PANS.has(digits) || !luhn(digits)) continue;
+        out.push({ file: f.path, detail: `card-like number ending ${digits.slice(-4)}` });
+      }
+    }
+  }
+  return out;
+}
+
+const HEALTH_FIELD = /health.?card|ohip|medical.?record|\bmrn\b|diagnos|patient.?(id|name|record)|prescription/i;
+const ONTARIO_HEALTH_CARD = /\b\d{4}[- ]?\d{3}[- ]?\d{3}[- ]?[A-Za-z]{2}\b/;
+
+export function extractHealthData(files: DiffFile[]): FactSite[] {
+  const out = logSites(files, HEALTH_FIELD);
+  for (const f of files) {
+    if (isDoc(f.path)) continue;
+    for (const line of f.added) {
+      if (ONTARIO_HEALTH_CARD.test(line)) out.push({ file: f.path, detail: "Ontario health-card-shaped number" });
+    }
+  }
+  return out;
+}
+
+// ---------- AI governance ----------
+
+const AI_PROVIDERS: [string, RegExp][] = [
+  ["openai", /from ['"]openai['"]|new OpenAI\(|api\.openai\.com/],
+  ["anthropic", /@anthropic-ai\/sdk|api\.anthropic\.com|new Anthropic\(/],
+  ["workers-ai", /\b(env|this\.env)\.AI\.run\(|\bai\.run\(\s*['"]@cf\//],
+  ["vercel-ai-sdk", /from ['"]ai['"]|\bgenerateText\(|\bstreamText\(/],
+  ["google-genai", /generativelanguage\.googleapis\.com|@google\/generative-ai|GoogleGenerativeAI/],
+  ["huggingface", /@huggingface\/inference|api-inference\.huggingface\.co/],
+  ["langchain", /from ['"]langchain|@langchain\//],
+];
+
+export function extractAiUsage(files: DiffFile[]): { file: string; provider: string }[] {
+  const out: { file: string; provider: string }[] = [];
+  for (const f of files) {
+    if (isDoc(f.path)) continue;
+    const text = f.added.join("\n");
+    for (const [provider, re] of AI_PROVIDERS) if (re.test(text)) out.push({ file: f.path, provider });
+  }
+  return out;
+}
+
+const AI_DISCLOSURE = /ai[- ]generated|generated by ai|powered by ai|ai assistant|you(?:'re| are) (?:talking|chatting|speaking) (?:to|with) an? (?:ai|bot|assistant)|this is an ai/i;
+
+export function extractAiDisclosure(files: DiffFile[]): boolean {
+  return files.some((f) => isUi(f.path) && AI_DISCLOSURE.test(f.added.join("\n")));
+}
+
+// ---------- dependencies ----------
+
+const PACKAGE_JSON_META = new Set(["name", "version", "description", "main", "module", "types", "type", "license", "author", "homepage", "repository", "private", "packageManager", "bin", "unpkg", "jsdelivr"]);
+
+/** Added npm dependencies from any package.json, with range operators stripped for registry lookups. */
+export function extractDependencies(files: DiffFile[]): { name: string; version: string }[] {
+  const out: { name: string; version: string }[] = [];
+  for (const f of files) {
+    if (!/(^|\/)package\.json$/.test(f.path)) continue;
+    for (const line of f.added) {
+      const m = line.match(/^\s*"((?:@[\w.-]+\/)?[\w.-]+)"\s*:\s*"([^"]+)"\s*,?\s*$/);
+      if (!m || PACKAGE_JSON_META.has(m[1])) continue;
+      const v = m[2].match(/^[\^~>=<\s]*v?(\d+\.\d+\.\d+(?:[-+][\w.]+)?)/);
+      if (v) out.push({ name: m[1], version: v[1] });
+    }
+  }
+  return out;
+}
