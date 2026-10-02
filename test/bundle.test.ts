@@ -2,7 +2,6 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-// @ts-expect-error plain .mjs helper shared with the CLI scripts
 import { buildBundle } from "../scripts/lib/bundle.mjs";
 
 const dirs: string[] = [];
