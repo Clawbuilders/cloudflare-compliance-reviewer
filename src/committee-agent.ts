@@ -9,6 +9,9 @@ import { canRequestWaiver, decideApproval, parseCommand, type WaiverStatus } fro
 
 export interface PullRequestEvent extends PrRef {}
 
+/** The SDK infers the Durable Object binding from the class name; ours is named COMMITTEE, so say so explicitly. */
+const AGENT_BINDING = { agentBinding: "COMMITTEE" } as const;
+
 export interface CommentEvent {
   repo: string;
   number: number;
@@ -66,7 +69,7 @@ export class PrCommittee extends Agent<Env, State> {
   async handlePullRequest(p: PullRequestEvent): Promise<void> {
     if (!shouldSchedule(this.state, p.sha)) return; // duplicate delivery
     this.setState({ ...this.state, latestSha: p.sha, pr: p });
-    await this.schedule(15, "startReview", { sha: p.sha });
+    await this.schedule(15, "startReview", { sha: p.sha }, { idempotent: true });
   }
 
   /** An issue_comment webhook on this PR: waiver commands. */
@@ -88,14 +91,11 @@ export class PrCommittee extends Agent<Env, State> {
       if (existing && (existing.status === "pending" || existing.status === "approved")) {
         return reply(`A waiver for \`${cmd.findingId}\` is already ${existing.status}.`);
       }
-      const workflowId = await this.runWorkflow("WAIVER_WORKFLOW", {
-        repo: ev.repo,
-        number: ev.number,
-        findingId: cmd.findingId,
-        requester: ev.author,
-        reason: cmd.reason,
-        installationId: ev.installationId,
-      });
+      const workflowId = await this.runWorkflow(
+        "WAIVER_WORKFLOW",
+        { repo: ev.repo, number: ev.number, findingId: cmd.findingId, requester: ev.author, reason: cmd.reason, installationId: ev.installationId },
+        AGENT_BINDING,
+      );
       const now = Date.now();
       this.sql`INSERT OR REPLACE INTO waivers (finding_id, reason, requested_by, workflow_id, status, created_at)
         VALUES (${cmd.findingId}, ${cmd.reason}, ${ev.author}, ${workflowId}, 'pending', ${now})`;
@@ -115,6 +115,8 @@ export class PrCommittee extends Agent<Env, State> {
 
     const decision = decideApproval({ requester: existing.requested_by, approver: ev.author, approverPermission: permission, status: existing.status });
     if (!decision.ok) return reply(decision.reason);
+    // Record who approved *before* resuming the workflow: the audit trail must not depend on the shape of the event payload.
+    this.sql`UPDATE waivers SET approved_by = ${ev.author} WHERE finding_id = ${cmd.findingId}`;
     await this.approveWorkflow(existing.workflow_id, { reason: `Approved by ${ev.author}`, metadata: { approvedBy: ev.author } });
   }
 
@@ -123,9 +125,19 @@ export class PrCommittee extends Agent<Env, State> {
   /** Debounce timer fired: start the durable review for the newest commit. */
   async startReview(payload: { sha: string }): Promise<void> {
     const pr = this.state.pr;
-    if (!pr || !shouldReview(this.state, payload.sha)) return;
-    this.setState({ ...this.state, lastReviewedSha: payload.sha });
-    await this.runWorkflow("COMMITTEE_WORKFLOW", { repo: pr.repo, number: pr.number, sha: pr.sha, installationId: pr.installationId });
+    if (!pr || !shouldReview(this.state, payload.sha)) {
+      console.log(`review skipped for ${payload.sha.slice(0, 7)}: superseded by a newer push or already reviewed`);
+      return;
+    }
+    try {
+      const workflowId = await this.runWorkflow("COMMITTEE_WORKFLOW", { repo: pr.repo, number: pr.number, sha: pr.sha, installationId: pr.installationId }, AGENT_BINDING);
+      // Mark the sha reviewed only after the workflow exists: if starting it fails, the scheduler's retry must still be allowed to try.
+      this.setState({ ...this.state, lastReviewedSha: payload.sha });
+      console.log(`review started for ${pr.repo}#${pr.number}@${pr.sha.slice(0, 7)} (workflow ${workflowId})`);
+    } catch (e) {
+      console.error(`review failed to start for ${pr.repo}#${pr.number}@${pr.sha.slice(0, 7)}: ${e instanceof Error ? `${e.message}\n${e.stack ?? ""}` : String(e)}`);
+      throw e;
+    }
   }
 
   /** The workflow records what it decided, and which policy version decided it. */
@@ -156,11 +168,12 @@ export class PrCommittee extends Agent<Env, State> {
   /** WaiverWorkflow final step: record the outcome in the ledger and refresh the review comment. */
   async finishWaiver(r: { findingId: string; outcome: "approved" | "rejected" | "expired"; approver: string }): Promise<void> {
     const version = this.latestVerdict()?.policy_version ?? null;
-    this.sql`UPDATE waivers SET status = ${r.outcome}, approved_by = ${r.outcome === "approved" ? r.approver : null},
+    const approver = r.outcome === "approved" ? r.approver || this.waiver(r.findingId)?.approved_by || "" : "";
+    this.sql`UPDATE waivers SET status = ${r.outcome}, approved_by = ${approver || null},
       policy_version = ${version}, decided_at = ${Date.now()} WHERE finding_id = ${r.findingId}`;
     const pr = this.state.pr;
     if (pr) {
-      const note = r.outcome === "approved" ? `**Waiver approved** for \`${r.findingId}\` by \`${r.approver}\`.` : `**Waiver ${r.outcome}** for \`${r.findingId}\`.`;
+      const note = r.outcome === "approved" ? `**Waiver approved** for \`${r.findingId}\` by \`${approver}\`.` : `**Waiver ${r.outcome}** for \`${r.findingId}\`.`;
       await this.write(pr, `<!-- clawbuilders-waiver:${r.findingId} -->`, `<!-- clawbuilders-waiver:${r.findingId} -->\n${note}`);
     }
     await this.rerenderComment();

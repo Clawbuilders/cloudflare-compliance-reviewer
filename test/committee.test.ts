@@ -34,10 +34,19 @@ describe("selectSpecialists — triage can add scrutiny, never remove a known si
 });
 
 describe("review-state (Review Focus 3)", () => {
-  it("schedules for a new sha but not for a duplicate delivery", () => {
+  it("schedules a review for a sha that has not been reviewed yet", () => {
     expect(shouldSchedule({}, "a")).toBe(true);
-    expect(shouldSchedule({ latestSha: "a" }, "a")).toBe(false);
+    expect(shouldSchedule({ latestSha: "b", lastReviewedSha: "a" }, "b")).toBe(true);
   });
+
+  it("lets a redelivery retry a sha whose review never completed (a failed start must not be lost)", () => {
+    expect(shouldSchedule({ latestSha: "a" }, "a")).toBe(true);
+  });
+
+  it("does not schedule again once a sha has been reviewed", () => {
+    expect(shouldSchedule({ latestSha: "a", lastReviewedSha: "a" }, "a")).toBe(false);
+  });
+
   it("reviews only the newest sha, once", () => {
     expect(shouldReview({ latestSha: "b" }, "a")).toBe(false);
     expect(shouldReview({ latestSha: "b" }, "b")).toBe(true);

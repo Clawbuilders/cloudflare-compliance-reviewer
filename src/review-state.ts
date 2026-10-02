@@ -4,9 +4,13 @@ export interface ReviewerState {
   lastReviewedSha?: string;
 }
 
-/** A duplicate delivery of the sha we already know about must not schedule another review. */
+/**
+ * Schedule unless this sha was already reviewed. Deliberately NOT "unless we have seen it": a review that failed to start
+ * must be retried when GitHub redelivers the webhook. Duplicates inside the debounce window are harmless — the schedule is
+ * idempotent and `shouldReview` lets exactly one of them through.
+ */
 export function shouldSchedule(state: ReviewerState, sha: string): boolean {
-  return state.latestSha !== sha;
+  return state.lastReviewedSha !== sha;
 }
 
 /** When the debounce timer fires: only the newest sha is reviewed, and only once. */

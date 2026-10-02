@@ -42,7 +42,7 @@ export class A11yReviewer extends Agent<Env, State> {
   async handlePullRequest(p: PrEvent): Promise<void> {
     if (!shouldSchedule(this.state, p.sha)) return; // duplicate delivery
     this.setState({ ...this.state, latestSha: p.sha, pending: p });
-    await this.schedule(15, "reviewNow", { sha: p.sha });
+    await this.schedule(15, "reviewNow", { sha: p.sha }, { idempotent: true });
   }
 
   /** Fires when the debounce timer elapses. */
