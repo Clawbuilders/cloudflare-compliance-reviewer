@@ -1,0 +1,17 @@
+{
+  "documentation": {
+    "technical_documentation": { "completeness": 0.9 },
+    "explainability": { "completeness": 0.9 }
+  },
+  "metrics": {
+    "model_card": { "completeness": 0.9 },
+    "toxicity": { "max_toxicity": 0.08 },
+    "audit_logging": { "completeness": 0.9 }
+  },
+  "governance": {
+    "human_oversight": { "enabled": true },
+    "audit_logging": { "enabled": true },
+    "responsibility": { "clearly_assigned": true },
+    "incident_response": { "process_defined": true }
+  }
+}
