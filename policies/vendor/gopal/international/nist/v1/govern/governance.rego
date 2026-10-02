@@ -1,0 +1,55 @@
+package international.nist.v1.govern
+
+import data.helper_functions.declarations
+import rego.v1
+
+metadata := {
+	"title": "NIST AI RMF - Govern",
+	"description": "Policies for the Govern function of the NIST AI Risk Management Framework.",
+	"version": "1.0.0",
+	"category": "NIST AI RMF",
+	"references": ["NIST AI Risk Management Framework: https://www.nist.gov/itl/ai-risk-management-framework"],
+}
+
+# Default deny
+default allow := false
+
+# Allow if all governance dimensions are compliant
+allow if {
+	accountability.allow
+	transparency.allow
+	fairness.allow
+}
+
+# Accountability: Check for clear lines of responsibility and oversight
+default accountability := {"allow": false, "msg": "Accountability requirements not met."}
+
+accountability := {"allow": true, "msg": "Accountability requirements met."} if {
+	# Check for defined roles and responsibilities
+	declarations.resolve(input, ["governance", "roles_and_responsibilities_defined"])
+
+	# Check for established oversight mechanisms
+	declarations.resolve(input, ["governance", "oversight_mechanisms_in_place"])
+}
+
+# Transparency: Check for clear communication about the AI system
+default transparency := {"allow": false, "msg": "Transparency requirements not met."}
+
+transparency := {"allow": true, "msg": "Transparency requirements met."} if {
+	# Check for public documentation about the system's purpose and limitations
+	declarations.resolve(input, ["transparency", "public_documentation_available"])
+
+	# Check for clear explanations of the system's decisions
+	declarations.resolve(input, ["transparency", "decision_explanations_provided"])
+}
+
+# Fairness: Check for measures to mitigate bias
+default fairness := {"allow": false, "msg": "Fairness requirements not met."}
+
+fairness := {"allow": true, "msg": "Fairness requirements met."} if {
+	# Check for regular bias assessments
+	declarations.resolve(input, ["fairness", "bias_assessments_conducted"])
+
+	# Check for mitigation strategies for identified biases
+	declarations.resolve(input, ["fairness", "bias_mitigation_strategies_in_place"])
+}

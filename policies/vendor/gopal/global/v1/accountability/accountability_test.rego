@@ -1,0 +1,254 @@
+package global.v1.accountability_test
+
+import data.global.v1.accountability
+
+# Test case for compliant input with custom parameters
+test_allow_with_custom_params if {
+	accountability.allow with input as {
+		"governance": {
+			"human_oversight": {"enabled": true},
+			"audit_logging": {"enabled": true},
+			"responsibility": {"clearly_assigned": true},
+			"incident_response": {"process_defined": true},
+		},
+		"metrics": {"audit_logging": {"completeness": 0.85}},
+		"params": {"audit_logging_completeness_threshold": 0.75},
+	}
+}
+
+# Test case for compliant input with default parameters
+test_allow_with_default_params if {
+	accountability.allow with input as {
+		"governance": {
+			"human_oversight": {"enabled": true},
+			"audit_logging": {"enabled": true},
+			"responsibility": {"clearly_assigned": true},
+			"incident_response": {"process_defined": true},
+		},
+		"metrics": {"audit_logging": {"completeness": 0.85}},
+		"params": {},
+	}
+}
+
+# Test case for non-compliant input (missing human oversight)
+test_deny_missing_human_oversight if {
+	not accountability.allow with input as {
+		"governance": {
+			"human_oversight": {"enabled": false},
+			"audit_logging": {"enabled": true},
+			"responsibility": {"clearly_assigned": true},
+			"incident_response": {"process_defined": true},
+		},
+		"metrics": {"audit_logging": {"completeness": 0.85}},
+		"params": {"audit_logging_completeness_threshold": 0.75},
+	}
+}
+
+# Test case for non-compliant input (missing audit logging)
+test_deny_missing_audit_logging if {
+	not accountability.allow with input as {
+		"governance": {
+			"human_oversight": {"enabled": true},
+			"audit_logging": {"enabled": false},
+			"responsibility": {"clearly_assigned": true},
+			"incident_response": {"process_defined": true},
+		},
+		"metrics": {"audit_logging": {"completeness": 0.85}},
+		"params": {"audit_logging_completeness_threshold": 0.75},
+	}
+}
+
+# Test case for non-compliant input (insufficient audit logging completeness)
+test_deny_insufficient_audit_logging_completeness if {
+	not accountability.allow with input as {
+		"governance": {
+			"human_oversight": {"enabled": true},
+			"audit_logging": {"enabled": true},
+			"responsibility": {"clearly_assigned": true},
+			"incident_response": {"process_defined": true},
+		},
+		"metrics": {"audit_logging": {"completeness": 0.7}},
+		"params": {"audit_logging_completeness_threshold": 0.75},
+	}
+}
+
+# Test case for non-compliant input (missing responsibility assignment)
+test_deny_missing_responsibility_assignment if {
+	not accountability.allow with input as {
+		"governance": {
+			"human_oversight": {"enabled": true},
+			"audit_logging": {"enabled": true},
+			"responsibility": {"clearly_assigned": false},
+			"incident_response": {"process_defined": true},
+		},
+		"metrics": {"audit_logging": {"completeness": 0.85}},
+		"params": {"audit_logging_completeness_threshold": 0.75},
+	}
+}
+
+# Test case for non-compliant input (missing incident response)
+test_deny_missing_incident_response if {
+	not accountability.allow with input as {
+		"governance": {
+			"human_oversight": {"enabled": true},
+			"audit_logging": {"enabled": true},
+			"responsibility": {"clearly_assigned": true},
+			"incident_response": {"process_defined": false},
+		},
+		"metrics": {"audit_logging": {"completeness": 0.85}},
+		"params": {"audit_logging_completeness_threshold": 0.75},
+	}
+}
+
+# Test recommendations for missing human oversight
+test_recommendations_human_oversight if {
+	accountability.recommendations == ["Implement human oversight mechanisms for the AI system"] with input as {
+		"governance": {
+			"human_oversight": {"enabled": false},
+			"audit_logging": {"enabled": true},
+			"responsibility": {"clearly_assigned": true},
+			"incident_response": {"process_defined": true},
+		},
+		"metrics": {"audit_logging": {"completeness": 0.85}},
+		"params": {"audit_logging_completeness_threshold": 0.75},
+	}
+}
+
+# Test recommendations for missing audit logging
+test_recommendations_audit_logging if {
+	accountability.recommendations == ["Enable comprehensive audit logging for all AI system actions and decisions"] with input as {
+		"governance": {
+			"human_oversight": {"enabled": true},
+			"audit_logging": {"enabled": false},
+			"responsibility": {"clearly_assigned": true},
+			"incident_response": {"process_defined": true},
+		},
+		"metrics": {"audit_logging": {"completeness": 0.85}},
+		"params": {"audit_logging_completeness_threshold": 0.75},
+	}
+}
+
+# Test recommendations for insufficient audit logging completeness
+test_recommendations_audit_logging_completeness if {
+	accountability.recommendations[0] == "Enhance audit logging to capture more comprehensive information about system operations" with input as {
+		"governance": {
+			"human_oversight": {"enabled": true},
+			"audit_logging": {"enabled": true},
+			"responsibility": {"clearly_assigned": true},
+			"incident_response": {"process_defined": true},
+		},
+		"metrics": {"audit_logging": {"completeness": 0.7}},
+		"params": {"audit_logging_completeness_threshold": 0.75},
+	}
+}
+
+# Test compliance report details
+test_compliance_report_details if {
+	report := accountability.compliance_report with input as {
+		"governance": {
+			"human_oversight": {"enabled": true},
+			"audit_logging": {"enabled": true},
+			"responsibility": {"clearly_assigned": true},
+			"incident_response": {"process_defined": true},
+		},
+		"metrics": {"audit_logging": {"completeness": 0.85}},
+		"params": {"audit_logging_completeness_threshold": 0.75},
+	}
+
+	report.details.human_oversight_enabled == true
+	report.details.audit_logging_enabled == true
+	report.details.audit_logging_completeness == 0.85
+	report.details.audit_logging_completeness_threshold == 0.75
+	report.details.responsibility_assigned == true
+	report.details.incident_response_defined == true
+	report.overall_result == true
+	report.recommendations == []
+}
+
+# An unevaluated system must never satisfy allow. In Rego an undefined value is
+# not false, so a permissive default or an undefined intermediate rule can let a
+# system with no evidence pass.
+test_allow_denies_on_empty_input if {
+	not accountability.allow with input as {}
+}
+
+# See transparency_test for the reasoning. This policy had the same shape of
+# fail-open: `non_compliant if input.governance.audit_logging.enabled == true`
+# stopped firing when the declaration was attested, so a system with logging
+# enabled but incomplete quietly dropped off the report.
+attested_governance := {
+	"evaluated_at": "2026-08-29T00:00:00Z",
+	"governance": {"audit_logging": {"enabled": {
+		"value": true,
+		"asserted_by": "j.smith@example.com",
+		"expires": "2027-01-01T00:00:00Z",
+	}}},
+	"metrics": {"audit_logging": {"completeness": 0.4}},
+}
+
+test_attestation_does_not_silence_a_finding if {
+	accountability.non_compliant with input as attested_governance
+}
+
+complete_governance := {
+	"evaluated_at": "2026-08-29T00:00:00Z",
+	"governance": {
+		"human_oversight": {"enabled": true},
+		"audit_logging": {"enabled": {
+			"value": true,
+			"asserted_by": "j.smith@example.com",
+			"expires": "2027-01-01T00:00:00Z",
+		}},
+		"responsibility": {"clearly_assigned": true},
+		"incident_response": {"process_defined": true},
+	},
+	"metrics": {"audit_logging": {"completeness": 0.9}},
+}
+
+test_an_attested_declaration_is_read if {
+	accountability.allow with input as complete_governance
+}
+
+test_an_expired_attestation_stops_counting if {
+	stale := json.patch(complete_governance, [{
+		"op": "replace",
+		"path": "/governance/audit_logging/enabled/expires",
+		"value": "2026-01-01T00:00:00Z",
+	}])
+	not accountability.allow with input as stale
+}
+
+# Zero regression: a bare value behaves exactly as it did.
+test_a_bare_declaration_is_unaffected if {
+	bare := json.patch(complete_governance, [{
+		"op": "replace", "path": "/governance/audit_logging/enabled", "value": true,
+	}])
+	accountability.allow with input as bare
+}
+
+# Unmeasured completeness reads as null rather than 0, and the report survives.
+test_report_says_null_for_unmeasured_completeness if {
+	report := accountability.compliance_report with input as {"governance": {
+		"human_oversight": {"enabled": true},
+		"audit_logging": {"enabled": true},
+		"responsibility": {"clearly_assigned": true},
+		"incident_response": {"process_defined": true},
+	}}
+
+	report.details.audit_logging_completeness == null
+	report.overall_result == false
+}
+
+# The report must survive the submission with no evidence at all, and say what
+# is missing. Two separate things used to delete it: an undefined value anywhere
+# inside the object, and object.get on a parent that was not there. The
+# recommendation has to name an input that is genuinely absent, because a fixed
+# string naming one input is wrong whenever that input is the one supplied.
+test_report_survives_empty_input_and_names_what_is_missing if {
+	report := accountability.compliance_report with input as {}
+
+	report.overall_result == false
+	report.details.audit_logging_completeness == null
+	some rec in report.recommendations
+	contains(rec, "governance.audit_logging.enabled")
+}

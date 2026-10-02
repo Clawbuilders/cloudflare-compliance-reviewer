@@ -1,0 +1,71 @@
+package international.india.v1.digital_india_policy
+
+import data.helper_functions.declarations
+import rego.v1
+
+metadata := {
+	"title": "Digital India Policy",
+	"description": "Policies based on the principles of India's AI governance framework.",
+	"version": "1.0.0",
+	"category": "International",
+	"references": [
+		"NITI Aayog, National Strategy for Artificial Intelligence, 2018",
+		"MeitY, Advisory on AI, March 2024",
+		"Report of the Subcommittee on AI Governance and Guidelines Development",
+	],
+}
+
+# Default deny
+default allow := false
+
+# Allow if all policy dimensions are compliant
+allow if {
+	fairness.allow
+	transparency.allow
+	accountability.allow
+	safety.allow
+}
+
+# Fairness: Check for measures to mitigate bias and ensure non-discrimination
+default fairness := {"allow": false, "msg": "Fairness requirements not met."}
+
+fairness := {"allow": true, "msg": "Fairness requirements met."} if {
+	# Check for regular bias assessments
+	declarations.resolve(input, ["fairness", "bias_assessments_conducted"])
+
+	# Check for mitigation strategies for identified biases
+	declarations.resolve(input, ["fairness", "bias_mitigation_strategies_in_place"])
+}
+
+# Transparency: Check for clear communication about the AI system
+default transparency := {"allow": false, "msg": "Transparency requirements not met."}
+
+transparency := {"allow": true, "msg": "Transparency requirements met."} if {
+	# Check for clear labeling of AI-generated content
+	declarations.resolve(input, ["transparency", "ai_generated_content_labeled"])
+
+	# Check for public documentation about the system's purpose and limitations
+	declarations.resolve(input, ["transparency", "public_documentation_available"])
+}
+
+# Accountability: Check for clear lines of responsibility and oversight
+default accountability := {"allow": false, "msg": "Accountability requirements not met."}
+
+accountability := {"allow": true, "msg": "Accountability requirements met."} if {
+	# Check for defined roles and responsibilities
+	declarations.resolve(input, ["accountability", "roles_and_responsibilities_defined"])
+
+	# Check for established oversight mechanisms
+	declarations.resolve(input, ["accountability", "oversight_mechanisms_in_place"])
+}
+
+# Safety: Check for measures to ensure the safety and reliability of the AI system
+default safety := {"allow": false, "msg": "Safety requirements not met."}
+
+safety := {"allow": true, "msg": "Safety requirements met."} if {
+	# Check for risk assessments for unreliable AI models
+	declarations.resolve(input, ["safety", "risk_assessment_for_unreliable_models"])
+
+	# Check for measures to prevent threats to electoral integrity
+	declarations.resolve(input, ["safety", "electoral_integrity_safeguards_in_place"])
+}
