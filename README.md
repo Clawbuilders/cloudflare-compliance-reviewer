@@ -135,9 +135,25 @@ npx wrangler dev --var DRY_RUN:true        # DRY_RUN never writes to GitHub; /__
 Edit `policies/committee/*.rego` and its `_test.rego`, run `npm run policies:test`, then
 `npm run policies:publish -- --remote`. Editing policy files in a PR to this repository is itself flagged by change control.
 
+## Scan a whole repository
+
+The committee reviews a diff, so a baseline scan treats your repository as one big pull request that adds every tracked file:
+
+```bash
+npx tsx scripts/scan-repo.ts /path/to/your/repo --out findings.json
+```
+
+It runs entirely on your machine. **No model is called** (an AI stub that always fails stands in, so none of your code is sent anywhere);
+only npm package names go to deps.dev and ClearlyDefined for licence lookups. `change-control` is skipped by default, because
+"approvals" and "blast radius" are properties of a pull request, not of a snapshot (`--skip` takes a comma-separated list).
+
+Treat the result as a **list of leads to read**, not a verdict. The first scan of a real, mostly-Rust codebase produced several false
+positives (SVG coordinates that happen to pass the card-number checksum, prose that mentions a tracker, a generated types file);
+each became a regression test in `test/extractors.test.ts`. A scan also only sees what the extractors can see — see the limits below.
+
 ## What this does not do (read this)
-- **Heuristics read added lines only**, mostly single-line patterns tuned for JavaScript/TypeScript. A determined author can evade them.
-- **Licensing covers npm `package.json`** dependencies. The registry's license data can be wrong or missing.
+- **Heuristics read added lines only**, mostly single-line patterns tuned for JavaScript/TypeScript (Rust logging macros are covered; other languages mostly are not). A determined author can evade them.
+- **Licensing covers npm `package.json`** dependencies — not Cargo, Go, Python or others, so a Rust codebase gets almost no licence coverage (use `cargo deny` or `cargo about` for that). The registry's license data can be wrong or missing.
 - **Declared facts are assertions.** GOPAL cannot tell whether your `human_oversight.enabled: true` is true.
 - **Clef returns probabilities, not certainty.** The `score` question type in particular can be low-confidence; routing uses yes/no probabilities.
 - **It reviews a diff.** It is not a SAST scanner, a penetration test, or a legal review.
