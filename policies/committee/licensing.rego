@@ -1,7 +1,7 @@
 # Dependency licensing. Facts (SPDX expressions) come from deps.dev / ClearlyDefined; this policy decides.
 #
 # input:
-#   dependencies [{name, version, license, discovered?}]
+#   dependencies [{name, version, license, discovered?, file?}]   file = the manifest or lockfile (default package.json)
 #       license     SPDX id/expression, or null/""/NOASSERTION/NONE when the package declares none
 #       discovered  licenses found inside the package's files (ClearlyDefined), optional
 #   reuse        {enabled, files_missing_header}   only meaningful for repositories that follow the REUSE specification
@@ -57,7 +57,7 @@ finding(dep, rule, title_suffix, message) := {
 	"title": sprintf("%s %s", [label(dep), title_suffix]),
 	"message": message,
 	"citations": [license_of(dep)],
-	"file": "package.json",
+	"file": object.get(dep, "file", "package.json"),
 }
 
 deny contains finding(dep, "license_missing", "has no declared license", "No license was found. Using unlicensed code is not permitted by default; confirm the license before adding it.") if {

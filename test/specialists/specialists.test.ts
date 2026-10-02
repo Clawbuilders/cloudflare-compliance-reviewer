@@ -143,6 +143,60 @@ describe("licensing", () => {
   });
 });
 
+describe("licensing — Cargo (the first whole-repo scan saw almost nothing because this repo is Rust)", () => {
+  const lock = (name: string, version: string) => [
+    "[[package]]",
+    `name = "${name}"`,
+    `version = "${version}"`,
+    'source = "registry+https://github.com/rust-lang/crates.io-index"',
+  ];
+
+  it("applies to a Cargo.lock change even though lockfiles are filtered out of the review diff", () => {
+    const all = diffOf({ "Cargo.lock": lock("evil-gpl", "1.0.0") });
+    expect(byId("licensing").applies([], all)).toBe(true);
+    expect(byId("licensing").applies([])).toBe(false);
+  });
+
+  it("looks crates up on deps.dev's cargo system and denies a strong-copyleft crate, naming the lockfile", async () => {
+    const all = diffOf({ "Cargo.lock": [...lock("evil-gpl", "1.0.0"), ...lock("fine", "2.0.0")] });
+    const seen: string[] = [];
+    const json = (url: string) => {
+      seen.push(url);
+      if (url.includes("deps.dev") && url.includes("evil-gpl")) return { licenses: ["GPL-3.0-only"] };
+      if (url.includes("deps.dev") && url.includes("fine")) return { licenses: ["MIT OR Apache-2.0"] };
+      return null;
+    };
+    const out = await runSpecialist(byId("licensing"), { ...makeCtx({ files: [], json }), allFiles: all });
+    expect(seen.some((u) => u.includes("/systems/cargo/packages/evil-gpl/versions/1.0.0"))).toBe(true);
+    const denied = out.filter((f) => f.severity === "block");
+    expect(denied).toHaveLength(1);
+    expect(denied[0]).toMatchObject({ rule: "license_strong_copyleft", file: "Cargo.lock" });
+    expect(denied[0].title).toContain("evil-gpl@1.0.0");
+  });
+
+  it("uses ClearlyDefined's crate coordinates for enrichment", async () => {
+    const all = diffOf({ "Cargo.lock": lock("tiny", "0.3.1") });
+    const seen: string[] = [];
+    await runSpecialist(byId("licensing"), { ...makeCtx({ files: [], json: (u) => { seen.push(u); return null; } }), allFiles: all });
+    expect(seen.some((u) => u.includes("clearlydefined.io/definitions/crate/cratesio/-/tiny/0.3.1"))).toBe(true);
+  });
+
+  it("honours a larger dependency budget and says when it still had to stop", async () => {
+    const lines = Array.from({ length: 6 }, (_, i) => lock(`c${i}`, "1.0.0")).flat();
+    const all = diffOf({ "Cargo.lock": lines });
+    const ctx = { ...makeCtx({ files: [], json: () => ({ licenses: ["MIT"] }) }), allFiles: all, maxDependencies: 4, licenseEnrichment: false };
+    const out = await runSpecialist(byId("licensing"), ctx);
+    expect(out.find((f) => f.rule === "license_check_truncated")?.title).toContain("4 of 6");
+  });
+
+  it("skips ClearlyDefined entirely when enrichment is off (large scans)", async () => {
+    const all = diffOf({ "Cargo.lock": lock("x", "1.0.0") });
+    const seen: string[] = [];
+    await runSpecialist(byId("licensing"), { ...makeCtx({ files: [], json: (u) => { seen.push(u); return { licenses: ["MIT"] }; } }), allFiles: all, licenseEnrichment: false });
+    expect(seen.every((u) => !u.includes("clearlydefined"))).toBe(true);
+  });
+});
+
 describe("ai-governance (our rules + GOPAL on declared facts)", () => {
   const usage = diffOf({ "src/chat.ts": ['import OpenAI from "openai";'] });
   // Declared facts shaped like GOPAL's own compliant fixtures.

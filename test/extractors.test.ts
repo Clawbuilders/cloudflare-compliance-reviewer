@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  extractCargoPackages,
   changedPaths,
   extractAiDisclosure,
   extractAiUsage,
@@ -219,5 +220,68 @@ describe("Rust logging (the first scan was blind to the language most of the rep
 
   it("does not flag Rust log lines that merely contain the word in a message", () => {
     expect(extractPiiLogging(d("src/signup.rs", ['info!("signup complete");', 'println!("email sent");', 'tracing::debug!("password reset flow started");', 'info!("user {id} created");']))).toEqual([]);
+  });
+});
+
+describe("extractCargoPackages (Cargo.lock gives the exact, resolved versions)", () => {
+  const lock = [
+    "[[package]]",
+    'name = "serde"',
+    'version = "1.0.228"',
+    'source = "registry+https://github.com/rust-lang/crates.io-index"',
+    'checksum = "abc"',
+    "",
+    "[[package]]",
+    'name = "clawbuilders-shared"',
+    'version = "0.1.0"',
+    'dependencies = ["serde"]',
+    "",
+    "[[package]]",
+    'name = "regex"',
+    'version = "1.11.0"',
+    'source = "registry+https://github.com/rust-lang/crates.io-index"',
+  ];
+
+  it("lists registry packages with their exact versions and skips path and workspace crates", () => {
+    expect(extractCargoPackages(d("Cargo.lock", lock))).toEqual([
+      { name: "serde", version: "1.0.228", ecosystem: "cargo", file: "Cargo.lock" },
+      { name: "regex", version: "1.11.0", ecosystem: "cargo", file: "Cargo.lock" },
+    ]);
+  });
+
+  it("works for a Cargo.lock in a subdirectory and ignores other files", () => {
+    expect(extractCargoPackages(d("crates/x/Cargo.lock", lock))).toHaveLength(2);
+    expect(extractCargoPackages(d("notes.txt", lock))).toEqual([]);
+  });
+
+  it("does not leak a package's name onto the next package's version", () => {
+    const broken = ["[[package]]", 'name = "a"', "[[package]]", 'version = "9.9.9"', 'source = "registry+x"'];
+    expect(extractCargoPackages(d("Cargo.lock", broken))).toEqual([]);
+  });
+});
+
+describe("extractEmailSenders — signals are judged across the whole change, not per file", () => {
+  it("finds the unsubscribe link and the address in a template file when the sender lives in another file", () => {
+    const files = [
+      ...d("web-api/src/resend.rs", ['let url = "https://api.resend.com/emails";', "client.post(url).json(&body).send().await?;"]),
+      ...d("shared/src/email_templates.rs", ['<a href="{{{RESEND_UNSUBSCRIBE_URL}}}">Unsubscribe</a>', "let mailing_address = env_mailing_address();", "if !user.consent_given { return; }"]),
+    ];
+    expect(extractEmailSenders(files)).toEqual([{ file: "web-api/src/resend.rs", has_unsubscribe: true, has_consent_evidence: true, has_sender_identity: true }]);
+  });
+
+  it("still reports a sender whose change has none of the signals", () => {
+    expect(extractEmailSenders(d("web-api/src/resend.rs", ['let url = "https://api.resend.com/emails";']))).toEqual([
+      { file: "web-api/src/resend.rs", has_unsubscribe: false, has_consent_evidence: false, has_sender_identity: false },
+    ]);
+  });
+
+  it("recognises Rust and HTTP-API email senders", () => {
+    for (const line of ['let r = client.post("https://api.resend.com/broadcasts");', "let mailer = lettre::SmtpTransport::relay(host);", 'std::env::var("RESEND_API_KEY")']) {
+      expect(extractEmailSenders(d("src/mail.rs", [line])), line).toHaveLength(1);
+    }
+  });
+
+  it("does not report documentation or the template file itself as a sender", () => {
+    expect(extractEmailSenders(d("shared/src/email_templates.rs", ['<a href="{{{RESEND_UNSUBSCRIBE_URL}}}">Unsubscribe</a>']))).toEqual([]);
   });
 });

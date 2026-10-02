@@ -108,3 +108,16 @@ test_missing_spdx_header_is_silent_when_the_repo_does_not_use_reuse if {
 	count(licensing.warn) == 0 with input as i
 	count(licensing.warn) == 0 with input as {"reuse": {"files_missing_header": ["src/new.ts"]}}
 }
+
+# --- the finding names the manifest or lockfile the dependency came from ---
+
+test_finding_reports_the_dependency_file if {
+	i := {"dependencies": [{"name": "evil", "version": "1.0.0", "license": "GPL-3.0", "file": "Cargo.lock"}]}
+	some f in licensing.deny with input as i
+	f.file == "Cargo.lock"
+}
+
+test_finding_file_defaults_to_package_json if {
+	some f in licensing.deny with input as dep("x", "AGPL-3.0")
+	f.file == "package.json"
+}

@@ -7,7 +7,7 @@ import { triage } from "./clef";
 import type { Env } from "./env";
 import { mergeFindings, type Finding } from "./findings";
 import { PolicyEngine } from "./policy-engine";
-import { loadReviewableFiles, runOneSpecialist, SPECIALIST_IDS, type PrRef } from "./review-runtime";
+import { loadDiff, runOneSpecialist, SPECIALIST_IDS, type PrRef } from "./review-runtime";
 
 const RETRY = { retries: { limit: 3, delay: "5 seconds", backoff: "exponential" }, timeout: "2 minutes" } as const;
 
@@ -21,12 +21,18 @@ export class CommitteeWorkflow extends AgentWorkflow<PrCommittee, PrRef, unknown
     const p: PrRef = { repo: event.payload.repo, number: event.payload.number, sha: event.payload.sha, installationId: event.payload.installationId };
 
     const plan = await step.do("triage", RETRY, async () => {
-      const files = await loadReviewableFiles(this.env, p);
-      if (files.length === 0) return { run: [] as string[], skipped: SPECIALIST_IDS, tier: "no reviewable files" };
-      const threshold = Number(this.env.TRIAGE_THRESHOLD ?? "0.35");
-      const t = await triage(this.env.AI, truncateForModel(files, Number(this.env.MAX_DIFF_CHARS ?? "8000")), SPECIALIST_IDS, threshold);
-      const sel = selectSpecialists(files, t.run);
-      return { run: sel.run, skipped: sel.skipped, tier: t.tier };
+      const { all, files } = await loadDiff(this.env, p);
+      if (all.length === 0) return { run: [] as string[], skipped: SPECIALIST_IDS, tier: "empty diff" };
+      // A change that only touches lockfiles has nothing for a model to read; deterministic signals still pick the specialists.
+      let triaged: string[] = [];
+      let tier = "deterministic";
+      if (files.length > 0) {
+        const t = await triage(this.env.AI, truncateForModel(files, Number(this.env.MAX_DIFF_CHARS ?? "8000")), SPECIALIST_IDS, Number(this.env.TRIAGE_THRESHOLD ?? "0.35"));
+        triaged = t.run;
+        tier = t.tier;
+      }
+      const sel = selectSpecialists(files, triaged, all);
+      return { run: sel.run, skipped: sel.skipped, tier };
     });
 
     const results = await Promise.all(plan.run.map((id) => step.do(`specialist:${id}`, RETRY, async () => runOneSpecialist(this.env, p, id))));

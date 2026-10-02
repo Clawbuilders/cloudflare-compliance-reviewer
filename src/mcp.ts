@@ -13,8 +13,9 @@ import { getSpecialist, runSpecialist } from "./specialists";
 
 /** Run the committee over a raw diff — no GitHub involved. Used by the MCP tool so any agent can pre-check a change. */
 export async function checkCompliance(env: Env, diff: string, declarations?: unknown) {
-  const files = reviewable(parseUnifiedDiff(diff));
-  if (files.length === 0) return { policyVersion: null, tier: "no reviewable files", skipped: SPECIALIST_IDS, findings: [] };
+  const all = parseUnifiedDiff(diff);
+  const files = reviewable(all);
+  if (all.length === 0) return { policyVersion: null, tier: "empty diff", skipped: SPECIALIST_IDS, findings: [] };
 
   let engine: PolicyEngine;
   try {
@@ -24,11 +25,13 @@ export async function checkCompliance(env: Env, diff: string, declarations?: unk
     throw e;
   }
 
-  const t = await triage(env.AI, truncateForModel(files, Number(env.MAX_DIFF_CHARS ?? "8000")), SPECIALIST_IDS, Number(env.TRIAGE_THRESHOLD ?? "0.35"));
-  const sel = selectSpecialists(files, t.run);
+  // Nothing for a model to read in a lockfile-only change: skip triage and let the deterministic signals choose.
+  const t = files.length > 0 ? await triage(env.AI, truncateForModel(files, Number(env.MAX_DIFF_CHARS ?? "8000")), SPECIALIST_IDS, Number(env.TRIAGE_THRESHOLD ?? "0.35")) : { run: [] as string[], tier: "deterministic" };
+  const sel = selectSpecialists(files, t.run, all);
   const declText = declarations === undefined ? null : JSON.stringify(declarations);
   const ctx = {
     files,
+    allFiles: all,
     prMeta: { title: "", body: "", approvals: 0 },
     engine,
     ai: env.AI,

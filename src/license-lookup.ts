@@ -16,11 +16,14 @@ export interface LicenseLookup {
 export const DEPS_DEV_TIMEOUT_MS = 4000;
 export const CLEARLY_DEFINED_TIMEOUT_MS = 3000;
 
-export function depsDevUrl(name: string, version: string): string {
-  return `https://api.deps.dev/v3/systems/npm/packages/${encodeURIComponent(name)}/versions/${encodeURIComponent(version)}`;
+export type Ecosystem = "npm" | "cargo";
+
+export function depsDevUrl(name: string, version: string, ecosystem: Ecosystem = "npm"): string {
+  return `https://api.deps.dev/v3/systems/${ecosystem}/packages/${encodeURIComponent(name)}/versions/${encodeURIComponent(version)}`;
 }
 
-export function clearlyDefinedUrl(name: string, version: string): string {
+export function clearlyDefinedUrl(name: string, version: string, ecosystem: Ecosystem = "npm"): string {
+  if (ecosystem === "cargo") return `https://api.clearlydefined.io/definitions/crate/cratesio/-/${encodeURIComponent(name)}/${encodeURIComponent(version)}`;
   const scoped = name.startsWith("@") && name.includes("/");
   const [ns, pkg] = scoped ? name.split("/", 2) : ["-", name];
   return `https://api.clearlydefined.io/definitions/npm/npmjs/${encodeURIComponent(ns)}/${encodeURIComponent(pkg)}/${encodeURIComponent(version)}`;
@@ -28,10 +31,12 @@ export function clearlyDefinedUrl(name: string, version: string): string {
 
 const isStringArray = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === "string");
 
-export async function lookupLicense(name: string, version: string, fetchJson: FetchJson): Promise<LicenseLookup> {
+export async function lookupLicense(name: string, version: string, fetchJson: FetchJson, opts: { ecosystem?: Ecosystem; enrich?: boolean } = {}): Promise<LicenseLookup> {
+  const ecosystem = opts.ecosystem ?? "npm";
   const [dd, cd] = await Promise.all([
-    fetchJson(depsDevUrl(name, version), DEPS_DEV_TIMEOUT_MS).catch(() => null),
-    fetchJson(clearlyDefinedUrl(name, version), CLEARLY_DEFINED_TIMEOUT_MS).catch(() => null),
+    fetchJson(depsDevUrl(name, version, ecosystem), DEPS_DEV_TIMEOUT_MS).catch(() => null),
+    // Enrichment is optional: a large scan skips it to stay fast and kind to a free public service.
+    opts.enrich === false ? Promise.resolve(null) : fetchJson(clearlyDefinedUrl(name, version, ecosystem), CLEARLY_DEFINED_TIMEOUT_MS).catch(() => null),
   ]);
   const sources: LicenseLookup["sources"] = [];
 

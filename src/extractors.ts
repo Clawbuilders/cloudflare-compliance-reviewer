@@ -107,22 +107,24 @@ export function extractNewHosts(files: DiffFile[]): { file: string; host: string
 
 // ---------- CASL ----------
 
-const SENDS_EMAIL = /nodemailer|sendgrid|sgMail|mailgun|postmark|resend\.emails|\bses\.send|sendMail\s*\(|sendEmail\s*\(|\.emails?\.send\s*\(|EMAIL\.send/i;
+const SENDS_EMAIL =
+  /nodemailer|sendgrid|sgMail|mailgun|postmark|resend\.emails|api\.resend\.com|RESEND_API_KEY|\blettre\b|\bses\.send|sendMail\s*\(|sendEmail\s*\(|\.emails?\.send\s*\(|EMAIL\.send/i;
 
+/**
+ * Where is email sent from? The CASL signals (unsubscribe, consent record, sender identity) are judged across the WHOLE change,
+ * not per file: the sender usually lives in one file and the template with the unsubscribe link and address in another, and a
+ * per-file check reported a sender as non-compliant while its template was fine (found by the first whole-repo scan).
+ * For a pull request that touches only the sender this can still over-report; that is a waivable finding, not a silent miss.
+ */
 export function extractEmailSenders(files: DiffFile[]): { file: string; has_unsubscribe: boolean; has_consent_evidence: boolean; has_sender_identity: boolean }[] {
-  const out = [];
-  for (const f of files) {
-    if (skipFile(f)) continue;
-    const text = codeLines(f).join("\n");
-    if (!SENDS_EMAIL.test(text)) continue;
-    out.push({
-      file: f.path,
-      has_unsubscribe: /unsubscribe|list-unsubscribe/i.test(text),
-      has_consent_evidence: /consent|opt[-_ ]?in|subscribed_at|double.?opt/i.test(text),
-      has_sender_identity: /mailing.?address|physical.?address|company.?address|sender.?(name|address)|from_?name/i.test(text),
-    });
-  }
-  return out;
+  const candidates = files.filter((f) => !skipFile(f));
+  const wholeChange = candidates.map((f) => codeLines(f).join("\n")).join("\n");
+  const signals = {
+    has_unsubscribe: /unsubscribe|list-unsubscribe/i.test(wholeChange),
+    has_consent_evidence: /consent|opt[-_ ]?in|subscribed_at|double.?opt/i.test(wholeChange),
+    has_sender_identity: /mailing.?address|physical.?address|company.?address|sender.?(name|address)|from_?name/i.test(wholeChange),
+  };
+  return candidates.filter((f) => SENDS_EMAIL.test(codeLines(f).join("\n"))).map((f) => ({ file: f.path, ...signals }));
 }
 
 // ---------- sensitive data ----------
@@ -205,6 +207,41 @@ export function extractAiDisclosure(files: DiffFile[]): boolean {
 }
 
 // ---------- dependencies ----------
+
+export interface PackageRef {
+  name: string;
+  version: string;
+  ecosystem: "npm" | "cargo";
+  /** The manifest or lockfile the package was found in. */
+  file: string;
+}
+
+/**
+ * Registry packages added to a `Cargo.lock`, with the exact resolved version (a lockfile, unlike `Cargo.toml`, names one).
+ * Path and workspace crates have no `source` line and are skipped. A diff shows only added lines, so this reads them as a
+ * small state machine and never lets one package's name carry over to the next package's version.
+ */
+export function extractCargoPackages(files: DiffFile[]): PackageRef[] {
+  const out: PackageRef[] = [];
+  for (const f of files) {
+    if (!/(^|\/)Cargo\.lock$/.test(f.path)) continue;
+    let name: string | undefined;
+    let version: string | undefined;
+    for (const line of f.added) {
+      if (line.startsWith("[[package]]")) {
+        name = undefined;
+        version = undefined;
+        continue;
+      }
+      const n = line.match(/^name = "([^"]+)"/);
+      if (n) name = n[1];
+      const v = line.match(/^version = "([^"]+)"/);
+      if (v) version = v[1];
+      if (/^source = "registry\+/.test(line) && name && version) out.push({ name, version, ecosystem: "cargo", file: f.path });
+    }
+  }
+  return out;
+}
 
 const PACKAGE_JSON_META = new Set(["name", "version", "description", "main", "module", "types", "type", "license", "author", "homepage", "repository", "private", "packageManager", "bin", "unpkg", "jsdelivr"]);
 

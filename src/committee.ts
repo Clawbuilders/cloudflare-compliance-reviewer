@@ -14,14 +14,14 @@ export interface Selection {
  * Combine the model's triage with deterministic signals. Triage exists to save work, so it may add scrutiny but must never
  * suppress a specialist whose own check already saw something (a wrong "skip" would be a silent miss).
  */
-export function selectSpecialists(files: DiffFile[], triaged: string[]): Selection {
+export function selectSpecialists(files: DiffFile[], triaged: string[], allFiles?: DiffFile[]): Selection {
   const wanted = new Set(triaged);
   const run: string[] = [];
   const skipped: string[] = [];
   const forced: string[] = [];
   for (const s of SPECIALISTS) {
     if (wanted.has(s.id)) run.push(s.id);
-    else if (s.applies(files)) {
+    else if (s.applies(files, allFiles)) {
       run.push(s.id);
       forced.push(s.id);
     } else skipped.push(s.id);

@@ -24,17 +24,23 @@ export async function tokenFor(env: Env, installationId?: number): Promise<strin
 }
 
 /** A diff for a given sha never changes, so the parsed result is safe to reuse across workflow steps in the same isolate. */
-const diffCache = new Map<string, DiffFile[]>();
+const diffCache = new Map<string, { all: DiffFile[]; files: DiffFile[] }>();
 
-export async function loadReviewableFiles(env: Env, p: PrRef): Promise<DiffFile[]> {
+/** Both views of one diff: `files` is the reviewable subset; `all` keeps lockfiles, which licensing reads. */
+export async function loadDiff(env: Env, p: PrRef): Promise<{ all: DiffFile[]; files: DiffFile[] }> {
   const key = `${p.repo}#${p.number}@${p.sha}`;
   const hit = diffCache.get(key);
   if (hit) return hit;
   const token = await tokenFor(env, p.installationId);
-  const files = reviewable(parseUnifiedDiff(await fetchPrDiff(p.repo, p.number, token)));
+  const all = parseUnifiedDiff(await fetchPrDiff(p.repo, p.number, token));
+  const loaded = { all, files: reviewable(all) };
   if (diffCache.size >= 20) diffCache.delete(diffCache.keys().next().value as string);
-  diffCache.set(key, files);
-  return files;
+  diffCache.set(key, loaded);
+  return loaded;
+}
+
+export async function loadReviewableFiles(env: Env, p: PrRef): Promise<DiffFile[]> {
+  return (await loadDiff(env, p)).files;
 }
 
 /** GET JSON with a hard timeout; null on timeout, non-200, or bad JSON. Used for deps.dev / ClearlyDefined. */
@@ -77,8 +83,10 @@ export async function runOneSpecialist(env: Env, p: PrRef, id: string): Promise<
     throw e;
   }
   const token = await tokenFor(env, p.installationId);
+  const { all, files } = await loadDiff(env, p);
   const ctx: SpecialistContext = {
-    files: await loadReviewableFiles(env, p),
+    files,
+    allFiles: all,
     prMeta: { title: "", body: "", approvals: await countApprovals(p.repo, p.number, token).catch(() => 0) },
     engine,
     ai: env.AI,
