@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "compliance-reviewer-starter",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-09",
+  "compatibility_flags": ["nodejs_compat"],
+  "ai": { "binding": "AI" },
+  "durable_objects": {
+    "bindings": [{ "name": "A11Y_REVIEWER", "class_name": "A11yReviewer" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["A11yReviewer"] }],
+  "vars": { "UI_THRESHOLD": "0.35" }
+}
