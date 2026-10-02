@@ -1,0 +1,30 @@
+{
+  "name": "cloudflare-compliance-reviewer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Advanced Track: a policy-as-code agent committee for GitHub PRs on Cloudflare (Agents SDK, Workflows, R2, Workers AI + Clef, Regorus). The Starter Track lives in ./starter.",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "policies:vendor": "node scripts/vendor-gopal.mjs",
+    "policies:test": "node scripts/test-policies.mjs",
+    "policies:bundle": "node scripts/build-bundle.mjs",
+    "policies:publish": "node scripts/publish-policies.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.0.0",
+    "agents": "^0.24.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261002.1",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.7",
+    "wrangler": "^4.146.0"
+  }
+}

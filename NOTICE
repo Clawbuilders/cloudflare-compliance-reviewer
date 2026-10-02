@@ -1,0 +1,21 @@
+cloudflare-compliance-reviewer
+Copyright (c) 2026 ClawBuilders (MIT)
+
+This project bundles or builds on third-party software:
+
+* Regorus (https://github.com/microsoft/regorus) — a Rego interpreter written in
+  Rust. MIT License, Copyright (c) Microsoft Corporation. A trimmed WebAssembly
+  build is vendored in vendor/regorus/ (see vendor/regorus/PROVENANCE.md).
+
+* GOPAL — Governance Open Policy Agent Library
+  (https://github.com/Principled-Evolution/gopal). Apache License 2.0. Selected
+  Rego policies (helper_functions, global, international) are vendored unmodified
+  in policies/vendor/gopal/ at a pinned commit, together with its LICENSE.
+
+* Cloudflare Agents SDK (https://github.com/cloudflare/agents) — MIT.
+
+* The GitHub App authentication helpers are adapted from
+  Clawbuilders/cloudflare-code-reviewer (MIT).
+
+This project flags risks for humans to review. It is not legal advice, and the
+regulatory citations it emits are pointers — verify them with qualified counsel.
