@@ -1,0 +1,7 @@
+name: fixture
+on: [push]
+jobs:
+  noop:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "fixture — never merged"
