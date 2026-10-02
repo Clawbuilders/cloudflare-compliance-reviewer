@@ -1,7 +1,10 @@
 # Dependency licensing. Facts (SPDX expressions) come from deps.dev / ClearlyDefined; this policy decides.
 #
 # input:
-#   dependencies [{name, version, license}]   license is an SPDX id/expression, or null/""/NOASSERTION/NONE when unknown
+#   dependencies [{name, version, license, discovered?}]
+#       license     SPDX id/expression, or null/""/NOASSERTION/NONE when the package declares none
+#       discovered  licenses found inside the package's files (ClearlyDefined), optional
+#   reuse        {enabled, files_missing_header}   only meaningful for repositories that follow the REUSE specification
 #
 # Ranks: 0 permissive, 1 weak copyleft, 2 unrecognised id, 3 strong copyleft, 4 missing.
 # "A OR B" takes the better choice (min); "A AND B" the worse (max); "WITH <exception>" is judged on the base license.
@@ -75,4 +78,26 @@ warn contains finding(dep, "license_unrecognised", "uses a license not on the al
 warn contains finding(dep, "license_weak_copyleft", "uses a weak copyleft license", "LGPL/MPL/EPL-style terms apply to modifications of this library. Fine for unmodified use; check your obligations.") if {
 	some dep in input.dependencies
 	rank(dep) == 1
+}
+
+# ClearlyDefined scans the files themselves. A stricter license in the files than in the declaration is a real red flag.
+warn contains finding(dep, "license_discovered_mismatch", "has a stricter license in its files than it declares", "The package's files contain GPL/AGPL/SSPL-style terms that its declared license does not mention. Review before using it.") if {
+	some dep in input.dependencies
+	rank(dep) < 3
+	some d in object.get(dep, "discovered", [])
+	is_string(d)
+	expression_rank(d) == 3
+}
+
+reuse := object.get(input, "reuse", {})
+
+warn contains {
+	"rule": "missing_spdx_header",
+	"title": sprintf("%s has no SPDX license header", [f]),
+	"message": "This repository follows the REUSE specification, so every new file needs SPDX-License-Identifier and copyright tags.",
+	"citations": ["REUSE Specification 3.3"],
+	"file": f,
+} if {
+	object.get(reuse, "enabled", false)
+	some f in object.get(reuse, "files_missing_header", [])
 }

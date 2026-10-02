@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { initRegorus, PolicyEngine, type PolicyBundle } from "../../src/policy-engine";
+import { buildBundle, SOURCES } from "../../scripts/lib/bundle.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -26,4 +27,15 @@ export function committeeEngine(): PolicyEngine {
     if (f.endsWith(".rego") && !f.endsWith("_test.rego")) files[`committee/${f}`] = fs.readFileSync(path.join(dir, f), "utf8");
   }
   return PolicyEngine.fromBundle({ version: "disk", files });
+}
+
+/** The real production bundle: our committee policies plus the vendored GOPAL tree. Cached — building it parses ~60 files. */
+let full: PolicyEngine | undefined;
+export function fullEngine(): PolicyEngine {
+  ensureRegorus();
+  if (!full) {
+    const bundle = buildBundle(SOURCES.map((s) => ({ ...s, dir: path.join(root, s.dir) })));
+    full = PolicyEngine.fromBundle(bundle);
+  }
+  return full;
 }

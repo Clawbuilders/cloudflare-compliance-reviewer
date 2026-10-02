@@ -73,3 +73,38 @@ test_empty_input_has_no_findings if {
 	count(licensing.warn) == 0 with input as {}
 	count(licensing.deny) == 0 with input as {"dependencies": []}
 }
+
+# --- ClearlyDefined enrichment: licenses discovered in the package's files ---
+
+test_discovered_strong_copyleft_under_a_permissive_declaration_warns if {
+	i := {"dependencies": [{"name": "x", "version": "1", "license": "MIT", "discovered": ["MIT AND GPL-3.0"]}]}
+	"license_discovered_mismatch" in rules(licensing.warn) with input as i
+}
+
+test_discovered_permissive_licenses_do_not_warn if {
+	i := {"dependencies": [{"name": "x", "version": "1", "license": "MIT", "discovered": ["MIT", "Apache-2.0"]}]}
+	count(licensing.warn) == 0 with input as i
+}
+
+test_discovered_copyleft_is_not_double_reported_when_already_denied if {
+	i := {"dependencies": [{"name": "x", "version": "1", "license": "GPL-3.0", "discovered": ["GPL-3.0"]}]}
+	w := licensing.warn with input as i
+	not "license_discovered_mismatch" in rules(w)
+	"license_strong_copyleft" in rules(licensing.deny) with input as i
+}
+
+# --- REUSE-style SPDX headers (only when the repository follows REUSE) ---
+
+test_missing_spdx_header_warns_when_the_repo_uses_reuse if {
+	i := {"reuse": {"enabled": true, "files_missing_header": ["src/new.ts"]}}
+	some f in licensing.warn with input as i
+	f.rule == "missing_spdx_header"
+	f.file == "src/new.ts"
+	"REUSE Specification 3.3" in f.citations
+}
+
+test_missing_spdx_header_is_silent_when_the_repo_does_not_use_reuse if {
+	i := {"reuse": {"enabled": false, "files_missing_header": ["src/new.ts"]}}
+	count(licensing.warn) == 0 with input as i
+	count(licensing.warn) == 0 with input as {"reuse": {"files_missing_header": ["src/new.ts"]}}
+}
