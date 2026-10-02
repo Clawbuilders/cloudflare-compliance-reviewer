@@ -45,7 +45,7 @@ const ctx = {
   // Lockfiles are filtered out of the review diff but carry the exact dependency versions licensing needs.
   allFiles,
   // A whole repository has far more dependencies than one pull request: look up many, and skip the optional enrichment.
-  maxDependencies: Number(flag("--max-deps") ?? 600),
+  maxDependencies: Number(flag("--max-deps") ?? 2000),
   licenseEnrichment: false,
   prMeta: { title: "baseline scan", body: "", approvals: 0 },
   engine,
@@ -69,7 +69,7 @@ for (const f of findings) {
   summary[f.specialist] ??= { block: 0, warn: 0, info: 0 };
   summary[f.specialist][f.severity]++;
 }
-const result = { commit, policyVersion: engine.version, filesScanned: files.length, packagesChecked: Math.min(Number(flag("--max-deps") ?? 600), extractCargoPackages(allFiles).length), skipped: [...skip], timings, summary, findings };
+const result = { commit, policyVersion: engine.version, filesScanned: files.length, packagesChecked: Math.min(Number(flag("--max-deps") ?? 2000), extractCargoPackages(allFiles).length), skipped: [...skip], timings, summary, findings };
 const out = flag("--out");
 if (out) fs.writeFileSync(out, JSON.stringify(result, null, 2));
 console.log(JSON.stringify({ commit, policyVersion: engine.version, filesScanned: files.length, skipped: [...skip], timings, summary, total: findings.length }, null, 2));

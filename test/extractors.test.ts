@@ -285,3 +285,22 @@ describe("extractEmailSenders — signals are judged across the whole change, no
     expect(extractEmailSenders(d("shared/src/email_templates.rs", ['<a href="{{{RESEND_UNSUBSCRIBE_URL}}}">Unsubscribe</a>']))).toEqual([]);
   });
 });
+
+describe("extractTrackers — consent gating is judged across the whole change", () => {
+  it("counts a tracker as gated when the consent gate lives in another file (the init and the gate are rarely in the same file)", () => {
+    const files = [
+      ...d("app/src/track.rs", ["posthog.init('key', { api_host: HOST });"]),
+      ...d("app/src/consent.rs", ["pub fn resolve(stored: Option<&str>, dnt: bool) -> ConsentState {", "    if dnt { return ConsentState::Declined; }"]),
+    ];
+    expect(extractTrackers(files)).toEqual([{ file: "app/src/track.rs", name: "posthog", consent_gated: true }]);
+  });
+
+  it("still reports a tracker with no consent logic anywhere in the change", () => {
+    expect(extractTrackers(d("app/src/track.rs", ["posthog.init('key', {});"]))).toEqual([{ file: "app/src/track.rs", name: "posthog", consent_gated: false }]);
+  });
+
+  it("ignores consent mentioned only in comments", () => {
+    const files = [...d("a.rs", ["posthog.init('k', {});"]), ...d("b.rs", ["// TODO add consent later", "# opt-in someday"])];
+    expect(extractTrackers(files)[0].consent_gated).toBe(false);
+  });
+});

@@ -74,13 +74,20 @@ const TRACKERS: [string, RegExp][] = [
 ];
 const CONSENT = /(has|get|check|require|await)?_?consent|cookie.?consent|cookie.?banner|\bopt[-_ ]?in\b|gdpr/i;
 
+/**
+ * Consent gating is judged across the whole change, not per file: the call that loads a tracker and the code that decides whether
+ * to load it almost never share a file (here: `track.rs` initialises PostHog and `consent.rs` decides). Judging per file reported
+ * a properly gated tracker as ungated. The cost is leniency — any consent logic in the change counts — so this is a prompt to look,
+ * and a change that gates only some trackers needs a human read.
+ */
 export function extractTrackers(files: DiffFile[]): { file: string; name: string; consent_gated: boolean }[] {
+  const candidates = files.filter((f) => !skipFile(f));
+  const gatedSomewhere = CONSENT.test(candidates.map((f) => codeLines(f).join("\n")).join("\n"));
   const out: { file: string; name: string; consent_gated: boolean }[] = [];
-  for (const f of files) {
-    if (skipFile(f)) continue;
+  for (const f of candidates) {
     const text = codeLines(f).join("\n");
     for (const [name, re] of TRACKERS) {
-      if (re.test(text)) out.push({ file: f.path, name, consent_gated: CONSENT.test(text) });
+      if (re.test(text)) out.push({ file: f.path, name, consent_gated: gatedSomewhere });
     }
   }
   return out;

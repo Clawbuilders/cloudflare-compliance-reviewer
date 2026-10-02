@@ -121,3 +121,16 @@ test_finding_file_defaults_to_package_json if {
 	some f in licensing.deny with input as dep("x", "AGPL-3.0")
 	f.file == "package.json"
 }
+
+# --- common permissive licences that must not be reported as "unrecognised" (found on the first Cargo scan) ---
+
+test_unicode_and_other_common_permissive_licenses_pass if {
+	every l in ["Unicode-3.0", "Unicode-DFS-2016", "MIT-0", "NCSA", "curl", "Libpng-2.0", "OFL-1.1", "Zlib", "Apache-2.0 WITH LLVM-exception"] {
+		count(licensing.warn) == 0 with input as dep("x", l)
+		count(licensing.deny) == 0 with input as dep("x", l)
+	}
+}
+
+test_a_genuinely_unknown_license_is_still_flagged if {
+	"license_unrecognised" in rules(licensing.warn) with input as dep("x", "Totally-Made-Up-1.0")
+}

@@ -15,6 +15,7 @@ import rego.v1
 permissive := {
 	"mit", "isc", "0bsd", "unlicense", "cc0-1.0", "zlib", "bsl-1.0", "python-2.0", "psf-2.0",
 	"apache-2.0", "bsd-2-clause", "bsd-3-clause", "blueoak-1.0.0", "cc-by-4.0", "wtfpl",
+	"unicode-3.0", "unicode-dfs-2016", "mit-0", "ncsa", "curl", "libpng-2.0", "bzip2-1.0.6", "ofl-1.1",
 }
 
 missing := {"", "none", "noassertion"}
