@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "compliance-committee",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-09",
+  "compatibility_flags": ["nodejs_compat"],
+  "ai": { "binding": "AI" },
+  "r2_buckets": [{ "binding": "POLICIES", "bucket_name": "compliance-policies" }],
+  "durable_objects": {
+    "bindings": [{ "name": "COMMITTEE", "class_name": "PrCommittee" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["PrCommittee"] }],
+  "workflows": [
+    { "name": "compliance-committee-review", "binding": "COMMITTEE_WORKFLOW", "class_name": "CommitteeWorkflow" },
+    { "name": "compliance-committee-waiver", "binding": "WAIVER_WORKFLOW", "class_name": "WaiverWorkflow" }
+  ],
+  "vars": { "TRIAGE_THRESHOLD": "0.35", "MAX_DIFF_CHARS": "8000" },
+  "observability": { "enabled": true }
+}
