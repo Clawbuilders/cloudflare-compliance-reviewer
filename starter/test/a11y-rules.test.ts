@@ -67,6 +67,14 @@ describe("click-handler-role (WCAG 4.1.2 / 2.1.1)", () => {
   });
 });
 
+describe("snippets are complete, readable tokens", () => {
+  it("includes the closing brace/quote of tabindex and outline matches", () => {
+    const snippets = findA11yIssues(diffOf("a.tsx", ["<div tabIndex={3}>", '<div style={{ outline: "none" }} />'])).map((f) => f.snippet);
+    expect(snippets).toContain("tabIndex={3}");
+    expect(snippets).toContain('outline: "none"');
+  });
+});
+
 describe("scope", () => {
   it("ignores non-UI files and removed lines", () => {
     expect(rules("a.ts", ['const s = "<img src=x>";'])).toEqual([]);

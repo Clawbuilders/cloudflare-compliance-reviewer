@@ -49,10 +49,10 @@ export function findA11yIssues(files: DiffFile[]): A11yFlag[] {
         add("input-label", "1.3.1", "A", m[0], "Input has no label hook. Add an id with a matching <label for>, or an aria-label.");
       }
     }
-    for (const m of text.matchAll(/tab[iI]ndex\s*=\s*(?:\{\s*|["'])\s*(-?\d+)/g)) {
+    for (const m of text.matchAll(/tab[iI]ndex\s*=\s*(?:\{\s*|["'])\s*(-?\d+)\s*[}"']?/g)) {
       if (parseInt(m[1], 10) > 0) add("tabindex-positive", "2.4.3", "A", m[0], "Positive tabindex overrides the natural focus order. Use 0 or -1 and fix the DOM order instead.");
     }
-    for (const m of text.matchAll(/outline\s*:\s*['"]?(?:none|0(?:px)?)(?![\w.-])/gi)) {
+    for (const m of text.matchAll(/outline\s*:\s*['"]?(?:none|0(?:px)?)(?![\w.-])['"]?/gi)) {
       add("focus-visible", "2.4.7", "AA", m[0], "Removing the focus outline hides keyboard focus. Provide a visible replacement (e.g. :focus-visible styles).");
     }
     for (const m of text.matchAll(/<(?:div|span)\b([^>]*)>/gi)) {
