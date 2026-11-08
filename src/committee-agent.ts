@@ -61,6 +61,8 @@ export class PrCommittee extends Agent<Env, State> {
     this.sql`CREATE TABLE IF NOT EXISTS waivers (
       finding_id TEXT PRIMARY KEY, reason TEXT NOT NULL, requested_by TEXT NOT NULL, workflow_id TEXT NOT NULL,
       status TEXT NOT NULL, approved_by TEXT, policy_version TEXT, created_at INTEGER NOT NULL, decided_at INTEGER)`;
+    // DRY_RUN only: what would have been posted to GitHub (review, waiver notices, refusals), one row per marker like the real upsert.
+    this.sql`CREATE TABLE IF NOT EXISTS dry_run_comments (marker TEXT PRIMARY KEY, body TEXT NOT NULL, ts INTEGER NOT NULL)`;
   }
 
   // ---------- entry points called by the Worker ----------
@@ -211,6 +213,11 @@ export class PrCommittee extends Agent<Env, State> {
     return this.latestFindings();
   }
 
+  /** DRY_RUN: the comments the bot would have posted or edited, oldest first. Refusals ("needs a different person") show up here. */
+  getDryRunComments(): { marker: string; body: string; ts: number }[] {
+    return this.sql<{ marker: string; body: string; ts: number }>`SELECT marker, body, ts FROM dry_run_comments ORDER BY ts, rowid`;
+  }
+
   // ---------- internals ----------
 
   /** Real GitHub permission; in DRY_RUN a DEV_PERMISSIONS map stands in so waiver flows can be exercised without real users. */
@@ -240,8 +247,12 @@ export class PrCommittee extends Agent<Env, State> {
     return this.sql<WaiverRow>`SELECT * FROM waivers WHERE finding_id = ${findingId}`[0];
   }
 
+  private recordDryRun(marker: string, body: string): void {
+    this.sql`INSERT OR REPLACE INTO dry_run_comments (marker, body, ts) VALUES (${marker}, ${body}, ${Date.now()})`;
+  }
+
   private async write(pr: PullRequestEvent, marker: string, body: string): Promise<void> {
-    if (this.env.DRY_RUN === "true") return;
+    if (this.env.DRY_RUN === "true") return this.recordDryRun(marker, body);
     const token = await tokenFor(this.env, pr.installationId);
     if (!token) {
       console.warn("No GitHub credentials configured; nothing posted.");
@@ -251,7 +262,8 @@ export class PrCommittee extends Agent<Env, State> {
   }
 
   private async postComment(ev: CommentEvent, marker: string, text: string, token: string | undefined): Promise<void> {
-    if (this.env.DRY_RUN === "true" || !token) return;
+    if (this.env.DRY_RUN === "true") return this.recordDryRun(marker, `${marker}\n${text}`);
+    if (!token) return;
     await upsertComment({ repo: ev.repo, issueNumber: ev.number, body: `${marker}\n${text}`, marker, token });
   }
 }

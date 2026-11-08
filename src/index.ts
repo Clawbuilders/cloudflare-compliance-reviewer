@@ -26,7 +26,13 @@ export default {
       const repo = url.searchParams.get("repo") ?? "";
       const number = url.searchParams.get("number") ?? "";
       const agent = await getAgentByName(env.COMMITTEE, `${repo}#${number}`);
-      return Response.json({ audit: await agent.getAuditLog(), waivers: await agent.getWaivers(), findings: await agent.getLatestFindings(), markdown: await agent.rerenderComment() });
+      return Response.json({
+        audit: await agent.getAuditLog(),
+        waivers: await agent.getWaivers(),
+        findings: await agent.getLatestFindings(),
+        markdown: await agent.rerenderComment(),
+        comments: await agent.getDryRunComments(),
+      });
     }
 
     if (request.method === "GET") return new Response("ClawBuilders Compliance Committee is running. Point a GitHub webhook (pull_request, issue_comment) at POST /.");
