@@ -1,0 +1,16 @@
+# Copy to .dev.vars for `npx wrangler dev` (.dev.vars is gitignored; never commit real values).
+# In production set these with `npx wrangler secret put <NAME>` instead.
+
+# The secret you typed into the GitHub webhook. Not needed with --var DRY_RUN:true.
+GITHUB_WEBHOOK_SECRET=
+
+# Fine-grained token limited to one repository: Contents (read), Pull requests (read), Issues (read and write).
+# Even for local dry runs, a token here avoids GitHub's anonymous rate limit (60 requests an hour) when fetching PR diffs.
+GITHUB_TOKEN=
+
+# Bearer token for POST /mcp. Unset = /mcp does not exist (404).
+MCP_TOKEN=
+
+# Optional: a GitHub App instead of GITHUB_TOKEN (private key in PKCS#8 PEM; see src/github.ts).
+# GITHUB_APP_ID=
+# GITHUB_APP_PRIVATE_KEY=
