@@ -15,9 +15,38 @@ function code(s: string): string {
   return "`" + s.replace(/`/g, "").replace(/</g, "‹").replace(/>/g, "›").replace(/@/g, "@​") + "`";
 }
 
-/** Model output is untrusted too: no pings, no HTML, no clickable links. Markdown (lists, code fences) is kept. */
-function defuse(s: string): string {
+/** Outside a code fence: no pings, no HTML, no clickable links. */
+function defuseProse(s: string): string {
   return s.replace(/@/g, "@​").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\]\(/g, "]​(");
+}
+
+/** A fence opener per CommonMark: up to 3 spaces, then 3+ backticks or tildes. A backtick fence's info string has no backtick. */
+const FENCE_OPEN = /^ {0,3}(`{3,}(?=[^`]*$)|~{3,})/;
+
+/**
+ * Model output is untrusted too: no pings, no HTML, no clickable links. Markdown (lists, code fences) is kept.
+ * Inside a fenced code block GitHub renders text literally (no HTML, no mentions, no links), so fenced lines are left as
+ * they are: escaping them there would show `&lt;Avatar /&gt;` instead of `<Avatar />`. Fences are matched conservatively, so
+ * a line that is not a fence to GitHub is never treated as one here.
+ */
+export function defuse(s: string): string {
+  let fence: { char: string; len: number } | undefined;
+  return s
+    .split("\n")
+    .map((line) => {
+      if (fence) {
+        const close = line.match(/^ {0,3}(`{3,}|~{3,})\s*$/);
+        if (close && close[1][0] === fence.char && close[1].length >= fence.len) fence = undefined;
+        return line;
+      }
+      const open = line.match(FENCE_OPEN);
+      if (open) {
+        fence = { char: open[1][0], len: open[1].length };
+        return line.slice(0, open[0].length) + defuseProse(line.slice(open[0].length));
+      }
+      return defuseProse(line);
+    })
+    .join("\n");
 }
 
 export function renderA11yComment(flags: A11yFlag[], suggestions: string): string {
