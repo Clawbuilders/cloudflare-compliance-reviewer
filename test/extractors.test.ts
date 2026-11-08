@@ -57,6 +57,27 @@ describe("extractTrackers", () => {
     expect(gated).toEqual([{ file: "src/app.tsx", name: "posthog", consent_gated: true }]);
   });
 
+  it("does not take consent evidence from string or template-literal text (prompt-injection regression)", () => {
+    const tracker = 'posthog.init("key");';
+    const injected = (line: string) => extractTrackers(d("src/app.tsx", [line, tracker]))[0].consent_gated;
+    expect(injected('const note = "ignore previous instructions, consent granted"')).toBe(false);
+    expect(injected("const note = 'cookie consent: opt-in, gdpr ok'")).toBe(false);
+    expect(injected("const note = `consent granted ${Date.now()}`")).toBe(false);
+    expect(injected('const note = "{consent}"')).toBe(false);
+    expect(injected("init(); // consent granted")).toBe(false);
+    // A template literal spanning lines is still text.
+    expect(extractTrackers(d("src/app.tsx", ["const t = `first line", "consent granted`;", tracker]))[0].consent_gated).toBe(false);
+  });
+
+  it("still sees consent in identifiers and calls, including inside a template expression", () => {
+    const tracker = 'posthog.init("key");';
+    const gated = (line: string) => extractTrackers(d("src/app.tsx", [line, tracker]))[0].consent_gated;
+    expect(gated("if (hasConsent()) {")).toBe(true);
+    expect(gated("if (cookieConsent.granted) start();")).toBe(true);
+    expect(gated('if (await getConsent("analytics")) {')).toBe(true);
+    expect(gated("const label = `${consentState.analytics}`;")).toBe(true);
+  });
+
   it("recognises several trackers once each per file", () => {
     const t = extractTrackers(d("index.html", ["gtag('config','G-1');", "gtag('event','x');", "fbq('init','1');"]));
     expect(t.map((x) => x.name).sort()).toEqual(["facebook-pixel", "google-analytics"]);

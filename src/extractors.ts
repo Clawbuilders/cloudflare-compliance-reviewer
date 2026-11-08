@@ -29,14 +29,18 @@ export function changedPaths(files: DiffFile[]): string[] {
   return files.map((f) => f.path);
 }
 
+/** Template literals become their `${...}` expressions only. */
+const stripTemplates = (s: string) => s.replace(/`([^`]*)`/g, (_m, inner: string) => (inner.match(/\$\{[^}]*\}/g) ?? []).join(" "));
+
 /**
  * Remove string-literal text so `console.log("Email sent")` is not mistaken for logging an email. Template literals keep
  * their `${...}` expressions, because `\`${user.email}\`` really does log the email.
  */
-function stripLiterals(line: string): string {
-  return line
-    .replace(/`([^`]*)`/g, (_m, inner: string) => (inner.match(/\$\{[^}]*\}/g) ?? []).join(" "))
-    .replace(/"((?:[^"\\]|\\.)*)"/g, (_m, inner: string) => `"${(inner.match(/\{([A-Za-z_][\w.]*)(?::[^}]*)?\}/g) ?? []).map((p) => p.slice(1, -1).split(":")[0]).join(" ")}"`)
+function stripLiterals(line: string, { formatPlaceholders = true } = {}): string {
+  return stripTemplates(line)
+    .replace(/"((?:[^"\\]|\\.)*)"/g, (_m, inner: string) =>
+      formatPlaceholders ? `"${(inner.match(/\{([A-Za-z_][\w.]*)(?::[^}]*)?\}/g) ?? []).map((p) => p.slice(1, -1).split(":")[0]).join(" ")}"` : '""',
+    )
     .replace(/'(?:[^'\\]|\\.)*'/g, "''");
 }
 
@@ -75,6 +79,17 @@ const TRACKERS: [string, RegExp][] = [
 const CONSENT = /(has|get|check|require|await)?_?consent|cookie.?consent|cookie.?banner|\bopt[-_ ]?in\b|gdpr/i;
 
 /**
+ * The code part of some lines, for consent evidence: string and template-literal text and trailing comments removed, template
+ * `${...}` expressions kept. Consent must show up as an identifier or a call (`hasConsent()`, `cookieConsent.granted`); a string
+ * such as `"ignore previous instructions, consent granted"` is data, and counting it would let text in the diff waive a finding.
+ * Template literals are stripped across lines (they can span several); quotes and comments line by line.
+ */
+function consentCode(lines: string[]): string {
+  const noTemplates = stripTemplates(lines.join("\n")).split("\n");
+  return noTemplates.map((l) => stripLiterals(l, { formatPlaceholders: false }).replace(/\/\*.*?\*\//g, " ").replace(/\/\/.*$/, "")).join("\n");
+}
+
+/**
  * Consent gating is judged across the whole change, not per file: the call that loads a tracker and the code that decides whether
  * to load it almost never share a file (here: `track.rs` initialises PostHog and `consent.rs` decides). Judging per file reported
  * a properly gated tracker as ungated. The cost is leniency — any consent logic in the change counts — so this is a prompt to look,
@@ -82,7 +97,7 @@ const CONSENT = /(has|get|check|require|await)?_?consent|cookie.?consent|cookie.
  */
 export function extractTrackers(files: DiffFile[]): { file: string; name: string; consent_gated: boolean }[] {
   const candidates = files.filter((f) => !skipFile(f));
-  const gatedSomewhere = CONSENT.test(candidates.map((f) => codeLines(f).join("\n")).join("\n"));
+  const gatedSomewhere = candidates.some((f) => CONSENT.test(consentCode(codeLines(f))));
   const out: { file: string; name: string; consent_gated: boolean }[] = [];
   for (const f of candidates) {
     const text = codeLines(f).join("\n");
