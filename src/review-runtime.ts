@@ -64,7 +64,7 @@ export function policyUnavailableFinding(message: string): Finding {
     specialist: "committee",
     severity: "block",
     title,
-    message: `No policy bundle could be loaded, so this change was NOT checked: ${message}. Publish one with \`npm run policies:publish\`.`,
+    message: `No policy bundle could be loaded, so this change was NOT checked: ${message}. Publish one with \`npm run policies:publish -- --remote\` (or \`-- --local\` for local dev).`,
     citations: [],
     rule: "policy_engine_unavailable",
     kind: "REAL",
