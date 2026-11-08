@@ -21,25 +21,41 @@ AODA (Ontario), the ADA and the EU Accessibility Act all build on. It is deliber
 
 The checks are plain functions with unit tests (`npm test`) — read them first, they are the heart of the track.
 
+## Deploy with the button
+
+The **Deploy to Cloudflare** button asks you to sign in to Cloudflare and connect GitHub or GitLab. It copies this directory
+into a new repository in your account, builds it, and deploys the Worker. Then set the two secrets and add the webhook
+(below).
+
 ## Run it
+
+Needs Node.js 22 or newer.
 
 ```bash
 npm install
 npm test
+cp .dev.vars.example .dev.vars              # optional: a GITHUB_TOKEN avoids GitHub's anonymous rate limit in dry runs
 npx wrangler dev --var DRY_RUN:true        # DRY_RUN returns the review in the response instead of posting to GitHub
 ```
 
-Send it a sample pull-request event (see the workshop guide), or deploy and add a webhook:
+Send it a sample pull-request event (see the [workshop guide](https://github.com/Clawbuilders/cloudflare-compliance-reviewer/blob/main/docs/workshop-guide.md)),
+or deploy and add a webhook:
 
 ```bash
 npx wrangler secret put GITHUB_WEBHOOK_SECRET
-npx wrangler secret put GITHUB_TOKEN       # fine-grained PAT: Pull requests (read), Issues (read/write)
+npx wrangler secret put GITHUB_TOKEN
 npm run deploy
 ```
 
-In your repository: **Settings → Webhooks → Add webhook** — payload URL = your Worker URL, content type `application/json`,
-the secret above, event **Pull requests**.
+**The token.** Create a fine-grained personal access token limited to the one repository you are reviewing, with
+**Pull requests: read** and **Issues: read and write** (the review is posted as an issue comment).
+
+**The webhook.** In that repository: **Settings → Webhooks → Add webhook**.
+- Payload URL: your Worker URL, which looks like `https://<worker-name>.<your-subdomain>.workers.dev/`.
+- Content type: `application/json`.
+- Secret: the value you gave `GITHUB_WEBHOOK_SECRET`.
+- Events: choose **Let me select individual events**, tick **Pull requests**, and untick anything else.
 
 ## Grow it into a committee
-The [Advanced track](..) keeps this shape and adds five more specialists, a policy engine, durable workflows, waivers and an
-audit log.
+The [Advanced track](https://github.com/Clawbuilders/cloudflare-compliance-reviewer) keeps this shape and adds five more
+specialists, a policy engine, durable workflows, waivers and an audit log.

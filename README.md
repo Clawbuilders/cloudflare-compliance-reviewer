@@ -1,6 +1,6 @@
 # Build a Policy-as-Code Agent Committee on Cloudflare
 
-ClawBuilders **S1:E6** · Agentic AI Summit Toronto · a hands-on workshop repo.
+ClawBuilders · Agentic AI Summit Toronto · a hands-on workshop repo.
 
 A GitHub pull-request reviewer built the way you would want a production agent built: **models extract facts, Rego decides.**
 Every verdict comes from a versioned policy, cites the rule it enforces, and is written to an audit log together with the
@@ -76,6 +76,10 @@ GOPAL judges *declared facts about an AI system*, not source code. Keep a `compl
 (see [`docs/examples/ai-system.json`](docs/examples/ai-system.json)). GOPAL's own caveat applies, and the comment repeats it:
 **a declared value is still an assertion unless an evaluator backs it.**
 
+Which GOPAL packs are included: `helper_functions`, `global` and `international`, vendored unmodified. GOPAL's
+`industry_specific` pack is left out because Regorus rejects one of its files (`ferpa_compliance.rego`, line 64), and one
+file that fails to parse would fail the whole bundle. See [`policies/vendor/gopal/SOURCE.md`](policies/vendor/gopal/SOURCE.md).
+
 ## Waivers (four eyes)
 
 Blocking findings show an id. In a PR comment:
@@ -92,8 +96,9 @@ with who requested, who approved, and the policy version, and the finding id sta
 
 ## Use it from any agent (MCP)
 
-`POST /mcp` serves a `check_compliance` tool (Streamable HTTP, bearer token) so Hermes, Claude Code, OpenClaw or any MCP
-client can pre-check a change before opening a PR. The endpoint does not exist until you set a token:
+`POST /mcp` serves a `check_compliance` tool (Streamable HTTP, bearer token) so Claude Code, Codex, Gemini CLI, Cursor,
+OpenCode, Hermes or any MCP client can pre-check a change before opening a PR. The endpoint does not exist until you set a
+token:
 
 ```bash
 npx wrangler secret put MCP_TOKEN
@@ -105,31 +110,70 @@ npx wrangler secret put MCP_TOKEN
     "headers": { "Authorization": "Bearer <your token>" } } } }
 ```
 
+**Locally**, start the Worker with a throwaway token, `npx wrangler dev --var MCP_TOKEN:dev` (publish the policies first
+with `npm run policies:publish -- --local`; the Workers AI binding runs remotely, so `wrangler` must be logged in). The URL is
+`http://localhost:8787/mcp` and the header is `Authorization: Bearer dev`. Raw `curl` must also send
+`Accept: application/json, text/event-stream`, or the server answers `406`:
+
+```bash
+# initialize
+curl -s http://localhost:8787/mcp -H 'Authorization: Bearer dev' -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"curl","version":"1"}}}'
+
+# call check_compliance with a diff that logs an email address
+curl -s http://localhost:8787/mcp -H 'Authorization: Bearer dev' -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"check_compliance","arguments":{"diff":"diff --git a/src/user.ts b/src/user.ts\n--- a/src/user.ts\n+++ b/src/user.ts\n@@ -0,0 +1 @@\n+console.log(user.email);\n"}}}'
+```
+
+The answer is a server-sent event whose `data:` line holds the result: a `pii_logging` finding from the privacy specialist,
+and the `policyVersion` that judged it. The MCP tool is a pre-check: it **writes no audit row**. Only the webhook path (a
+real pull request) records verdicts in the audit log.
+
 ## Set up the Advanced track
+
+Needs Node.js 22 or newer.
 
 ```bash
 npm install
 npx wrangler r2 bucket create compliance-policies
 npm run policies:publish -- --remote        # builds the bundle and points policies/ACTIVE at it
 npx wrangler secret put GITHUB_WEBHOOK_SECRET
-npx wrangler secret put GITHUB_TOKEN        # fine-grained PAT: Pull requests (read), Issues (read/write), Contents (read)
+npx wrangler secret put GITHUB_TOKEN
 npm run deploy
 ```
 
-Then in your repository: **Settings → Webhooks → Add webhook** — payload URL = your Worker URL, content type
-`application/json`, the secret above, events **Pull requests** and **Issue comments**.
-Prefer a GitHub App? Set `GITHUB_APP_ID` and `GITHUB_APP_PRIVATE_KEY` (PKCS#8; see `src/github.ts`) instead of the PAT.
+**The token.** Create a fine-grained personal access token limited to the one repository you are reviewing, with
+**Contents: read**, **Pull requests: read** and **Issues: read and write**.
+Prefer a GitHub App? Set `GITHUB_APP_ID` and `GITHUB_APP_PRIVATE_KEY` (PKCS#8; see `src/github.ts`) instead of the token.
+
+**The webhook.** In that repository: **Settings → Webhooks → Add webhook**.
+- Payload URL: your Worker URL, which looks like `https://<worker-name>.<your-subdomain>.workers.dev/`.
+- Content type: `application/json`.
+- Secret: the value you gave `GITHUB_WEBHOOK_SECRET`.
+- Events: choose **Let me select individual events**, tick **Pull requests** and **Issue comments** (waiver commands
+  arrive as comments), and untick anything else.
 
 Check it is alive: `curl https://<your-worker>.workers.dev/healthz` returns the active policy version. If no bundle is
-published, the committee posts a **blocking "policy engine unavailable"** finding instead of silently passing.
+published, the committee posts a **blocking "policy engine unavailable"** finding instead of silently passing. If a
+specialist's Rego package is missing from the published bundle, that specialist posts a blocking "policy package missing"
+finding instead of passing.
 
 ### Develop locally
 ```bash
 npm test                                   # unit tests (extractors, specialists, waivers, engine)
 npm run policies:test                      # every Rego test, including the vendored GOPAL suite
 npm run policies:publish -- --local
+cp .dev.vars.example .dev.vars             # optional: a GITHUB_TOKEN avoids GitHub's anonymous rate limit in dry runs
 npx wrangler dev --var DRY_RUN:true        # DRY_RUN never writes to GitHub; /__dry-run/state shows verdicts
 ```
+
+`docs/workshop-guide.md` has the full local walkthrough: a dry-run review of a real public PR, the four-eyes waiver with
+simulated users (`DEV_PERMISSIONS`), and breaking the policy pointer on purpose.
+
+**Troubleshooting.** `npm run policies:publish` on its own stops with "Pass --local or --remote": add `-- --local` (the R2
+that `wrangler dev` uses) or `-- --remote` (your real bucket).
 
 ### Change a policy
 Edit `policies/committee/*.rego` and its `_test.rego`, run `npm run policies:test`, then
