@@ -92,16 +92,6 @@ export async function fetchPrDiff(repo: string, number: number, token?: string |
   return res.text();
 }
 
-/** File contents at a ref, or null when it does not exist. */
-export async function fetchFileAtRef(repo: string, path: string, ref: string, token?: string | null, f: typeof fetch = fetch): Promise<string | null> {
-  const res = await f(`${API}/repos/${repo}/contents/${path.split("/").map(encodeURIComponent).join("/")}?ref=${encodeURIComponent(ref)}`, {
-    headers: baseHeaders(token, "application/vnd.github.raw+json"),
-  });
-  if (res.status === 404) return null;
-  await ensureOk(res, `file ${path}`);
-  return res.text();
-}
-
 export interface UpsertArgs {
   repo: string;
   issueNumber: number;
@@ -128,30 +118,4 @@ export async function upsertComment(a: UpsertArgs, f: typeof fetch = fetch): Pro
   await ensureOk(res, existing !== null ? "update comment" : "create comment");
   const data = (await res.json()) as { id: number; html_url?: string };
   return { id: data.id, url: data.html_url ?? "", action: existing !== null ? "updated" : "created" };
-}
-
-export type Permission = "admin" | "maintain" | "write" | "triage" | "read" | "none";
-
-export async function getCollaboratorPermission(repo: string, user: string, token?: string | null, f: typeof fetch = fetch): Promise<Permission> {
-  const res = await f(`${API}/repos/${repo}/collaborators/${encodeURIComponent(user)}/permission`, { headers: baseHeaders(token) });
-  if (res.status === 404) return "none";
-  await ensureOk(res, "collaborator permission");
-  const data = (await res.json()) as { permission?: string; role_name?: string };
-  const pick = (s?: string): Permission | null => (s && ["admin", "maintain", "write", "triage", "read", "none"].includes(s) ? (s as Permission) : null);
-  return pick(data.role_name) ?? pick(data.permission) ?? "none";
-}
-
-/** Number of reviewers whose most recent review is APPROVED. */
-export async function countApprovals(repo: string, number: number, token?: string | null, f: typeof fetch = fetch): Promise<number> {
-  const res = await f(`${API}/repos/${repo}/pulls/${number}/reviews?per_page=100`, { headers: baseHeaders(token) });
-  await ensureOk(res, "list reviews");
-  const reviews = (await res.json()) as { user?: { login: string }; state: string; submitted_at?: string }[];
-  const latest = new Map<string, { state: string; at: string }>();
-  for (const r of reviews) {
-    if (!r.user || r.state === "COMMENTED" || r.state === "PENDING") continue;
-    const at = r.submitted_at ?? "";
-    const prev = latest.get(r.user.login);
-    if (!prev || at >= prev.at) latest.set(r.user.login, { state: r.state, at });
-  }
-  return [...latest.values()].filter((v) => v.state === "APPROVED").length;
 }
