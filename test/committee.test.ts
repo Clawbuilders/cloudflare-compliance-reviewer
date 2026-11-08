@@ -1,9 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { selectSpecialists } from "../src/committee";
+import { SPECIALISTS } from "../src/specialists";
 import { shouldReview, shouldSchedule } from "../src/review-state";
 import { diffOf } from "./specialists/helpers";
 
-const ALL = ["privacy", "licensing", "casl", "ai-governance", "sensitive-data", "change-control"];
+// Derived from the registry so adding a specialist does not break these tests; the built-ins are still checked by name.
+const ALL = SPECIALISTS.map((s) => s.id);
+const BUILT_INS = ["privacy", "licensing", "casl", "ai-governance", "sensitive-data", "change-control"];
+
+it("the registry includes the six built-in specialists", () => {
+  expect(ALL).toEqual(expect.arrayContaining(BUILT_INS));
+});
 
 describe("selectSpecialists — triage can add scrutiny, never remove a known signal", () => {
   it("runs what triage chose and reports what it skipped", () => {
