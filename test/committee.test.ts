@@ -6,9 +6,9 @@ import { diffOf } from "./specialists/helpers";
 
 // Derived from the registry so adding a specialist does not break these tests; the built-ins are still checked by name.
 const ALL = SPECIALISTS.map((s) => s.id);
-const BUILT_INS = ["privacy", "licensing", "casl", "ai-governance", "sensitive-data", "change-control"];
+const BUILT_INS = ["privacy", "licensing", "casl", "ai-governance", "sensitive-data", "change-control", "canada-ai"];
 
-it("the registry includes the six built-in specialists", () => {
+it("the registry includes the seven built-in specialists", () => {
   expect(ALL).toEqual(expect.arrayContaining(BUILT_INS));
 });
 

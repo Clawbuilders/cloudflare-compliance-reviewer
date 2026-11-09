@@ -48,7 +48,7 @@ function createServer(env: Env) {
     "check_compliance",
     {
       description:
-        "Check a unified git diff against the policy-as-code committee (privacy, licensing, CASL, AI governance, sensitive data, change control). Returns cited findings. Flags risk for humans; not legal advice.",
+        "Check a unified git diff against the policy-as-code committee (privacy, licensing, CASL, AI governance, sensitive data, change control, Canada AI). Returns cited findings. Flags risk for humans; not legal advice.",
       inputSchema: {
         diff: z.string().min(1).max(500_000).describe("A unified diff (git diff output)."),
         declarations: z.record(z.string(), z.unknown()).optional().describe("Contents of compliance/ai-system.json, if the repo has one."),

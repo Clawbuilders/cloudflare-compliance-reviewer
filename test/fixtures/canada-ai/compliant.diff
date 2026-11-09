@@ -1,0 +1,56 @@
+diff --git a/src/hiring/screen.ts b/src/hiring/screen.ts
+new file mode 100644
+--- /dev/null
++++ b/src/hiring/screen.ts
+@@ -0,0 +1,33 @@
++/**
++ * Resume screener: asks a Workers AI model to score each application against the job description, then shortlists or
++ * sends low scores to a recruiter. No applicant is rejected by the model alone.
++ */
++export interface Env {
++  AI: Ai;
++}
++
++export interface Applicant {
++  id: string;
++  email: string;
++  resume: string;
++}
++
++/** Applicants scoring below this go to a recruiter, who makes the decision. */
++const REJECT_BELOW = 0.6;
++
++export async function screenApplicant(env: Env, applicant: Applicant, jobDescription: string) {
++  const out = await env.AI.run("@cf/meta/llama-3.1-8b-instruct", {
++    prompt: `Rate how well this resume fits the job from 0 to 1. Reply with the number only.\nJob: ${jobDescription}\nResume: ${applicant.resume}`,
++  });
++  const score = Number((out as { response?: string }).response ?? 0);
++
++  if (score < REJECT_BELOW) {
++    await queueForHumanReview(applicant.id, score);
++    return { status: "needs_review", score };
++  }
++  return { status: "shortlisted", score };
++}
++
++async function queueForHumanReview(id: string, score: number): Promise<void> {
++  console.log(`queued ${id} for a recruiter (score ${score})`);
++}
+diff --git a/templates/job-posting.md b/templates/job-posting.md
+new file mode 100644
+--- /dev/null
++++ b/templates/job-posting.md
+@@ -0,0 +1,13 @@
++# Software Developer, Toronto
++
++ClawBuilders Labs is hiring a software developer to build agent tooling on Cloudflare Workers.
++
++## What you will do
++- Build and ship Workers, Durable Objects and Workflows.
++- Review pull requests and pair with the team.
++
++## How to apply
++Send your resume through our careers page. We review every application and reply to everyone.
++
++We use artificial intelligence to help screen and assess applications. A recruiter makes every decision, and you can ask
++for a person to review your application at any time.

@@ -38,6 +38,7 @@ export const SPECIALIST_QUESTIONS: Record<string, string> = {
   "ai-governance": "Does this change add or modify AI, LLM, or machine-learning model usage, prompts, or model data flows?",
   "sensitive-data": "Could this change touch payment card data or personal health information?",
   "change-control": "Does this change CI/CD pipelines, infrastructure, authentication, or deployment configuration?",
+  "canada-ai": "Does this change make an automated decision about a person (approve, reject, ban, score) or use AI to screen job applicants or hiring?",
 };
 
 export interface TriageResult {

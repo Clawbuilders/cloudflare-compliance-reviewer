@@ -9,10 +9,10 @@ const byId = (id: string) => getSpecialist(id)!;
 const rules = (fs: { rule: string }[]) => fs.map((f) => f.rule);
 
 describe("registry", () => {
-  // Adding a specialist (workshop "add your own") must not break this: check the six built-ins by name, not the total.
-  it("has the six built-in committee specialists, each listed once", () => {
+  // Adding a specialist (workshop "add your own") must not break this: check the built-ins by name, not the total.
+  it("has the seven built-in committee specialists, each listed once", () => {
     const ids = SPECIALISTS.map((s) => s.id);
-    expect(ids).toEqual(expect.arrayContaining(["ai-governance", "casl", "change-control", "licensing", "privacy", "sensitive-data"]));
+    expect(ids).toEqual(expect.arrayContaining(["ai-governance", "canada-ai", "casl", "change-control", "licensing", "privacy", "sensitive-data"]));
     expect(new Set(ids).size).toBe(SPECIALISTS.length);
     for (const s of SPECIALISTS) {
       expect(["REAL", "HEURISTIC", "REAL+HEURISTIC"]).toContain(s.kind);
