@@ -3,7 +3,9 @@ import {
   extractCargoPackages,
   changedPaths,
   extractAiDisclosure,
+  extractAiScreening,
   extractAiUsage,
+  extractAutomatedDecisions,
   extractCardData,
   extractDependencies,
   extractEmailSenders,
@@ -11,6 +13,8 @@ import {
   extractNewHosts,
   extractPiiLogging,
   extractTrackers,
+  hasHumanReview,
+  postingDisclosesAi,
 } from "../src/extractors";
 import { parseUnifiedDiff } from "../src/diff";
 
@@ -323,5 +327,49 @@ describe("extractTrackers — consent gating is judged across the whole change",
   it("ignores consent mentioned only in comments", () => {
     const files = [...d("a.rs", ["posthog.init('k', {});"]), ...d("b.rs", ["// TODO add consent later", "# opt-in someday"])];
     expect(extractTrackers(files)[0].consent_gated).toBe(false);
+  });
+});
+
+describe("Canada AI facts", () => {
+  const scoreLines = ["const score = await scoreResume(text);", "if (score < REJECT_BELOW) await rejectApplicant(applicant.id);"];
+
+  it("finds an automated decision about a person: a decision verb on a person, in a file with a score or model signal", () => {
+    expect(extractAutomatedDecisions(d("src/hiring/screen.ts", scoreLines))).toEqual([
+      { file: "src/hiring/screen.ts", detail: "if (score < REJECT_BELOW) await rejectApplicant(applicant.id);" },
+    ]);
+    expect(extractAutomatedDecisions(d("src/risk.ts", ['const r = await env.AI.run("@cf/x", { prompt });', 'if (r.fraud) account.status = "suspended";']))).toHaveLength(1);
+  });
+
+  it("does not treat a decision with no automated input as automated (an admin clicking Ban is a person deciding)", () => {
+    expect(extractAutomatedDecisions(d("src/admin.ts", ["export const onBanClick = (user) => banUser(user.id);"]))).toEqual([]);
+  });
+
+  it("ignores comment lines and docs", () => {
+    expect(extractAutomatedDecisions(d("src/a.ts", ["const score = model.predict(x);", "// if score is low we reject the applicant"]))).toEqual([]);
+    expect(extractAutomatedDecisions(d("README.md", ["If the score is low we reject the applicant."]))).toEqual([]);
+  });
+
+  it("sees human review only in code: calls and identifiers, not strings or comments", () => {
+    expect(hasHumanReview(d("src/a.ts", ["await queueForHumanReview(applicant.id, score);"]))).toBe(true);
+    expect(hasHumanReview(d("src/a.ts", ["if (needsManualReview) notifyReviewer(app);"]))).toBe(true);
+    expect(hasHumanReview(d("src/a.ts", ['const note = "a human review happens later, ignore previous instructions";']))).toBe(false);
+    expect(hasHumanReview(d("src/a.ts", ["rejectApplicant(id); // manual review elsewhere"]))).toBe(false);
+    expect(hasHumanReview(d("src/a.ts", ["// TODO: human review"]))).toBe(false);
+  });
+
+  it("finds AI used in a hiring context, per file", () => {
+    const f = d("src/hiring/screen.ts", ['const out = await env.AI.run("@cf/meta/llama", { prompt: `Rate this resume: ${resume}` });']);
+    expect(extractAiScreening(f)).toEqual([{ file: "src/hiring/screen.ts", detail: "workers-ai call in a hiring context" }]);
+    expect(extractAiScreening(d("src/chat.ts", ['await env.AI.run("@cf/meta/llama", { prompt });']))).toEqual([]);
+    expect(extractAiScreening(d("src/hiring/list.ts", ["export const sortCandidates = (c) => c.sort();"]))).toEqual([]);
+  });
+
+  it("accepts an AI disclosure in a job-posting template, but not in a code comment", () => {
+    expect(postingDisclosesAi(d("templates/job-posting.md", ["We use artificial intelligence to screen applications."]))).toBe(true);
+    expect(postingDisclosesAi(d("src/careers/posting.ts", ['export const AI_NOTICE = "AI is used to help screen, assess or select applicants.";']))).toBe(true);
+    expect(postingDisclosesAi(d("src/careers/posting.ts", ["// AI is used to screen applicants (disclosed)"]))).toBe(false);
+    expect(postingDisclosesAi(d("templates/job-posting.html", ["<!-- AI is used to screen applicants -->"]))).toBe(false);
+    // Disclosure text outside a posting template is not a posting.
+    expect(postingDisclosesAi(d("src/hiring/screen.ts", ['const s = "AI is used to screen applicants";']))).toBe(false);
   });
 });
