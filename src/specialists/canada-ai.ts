@@ -6,7 +6,7 @@ import type { Specialist } from "./types";
 /**
  * Canada AI: the binding AI rules in Canada that code can show today (there is no federal AI act; AIDA lapsed in January 2025).
  *   - Quebec Law 25, s. 12.1: a decision about a person made by automated processing alone needs a notice and a human review route.
- *   - Ontario ESA 2000, ss. 8.1-8.6 and O. Reg. 476/24: a public job posting must say if AI screens, assesses or selects applicants.
+ *   - Ontario ESA 2000, s. 8.4(1) and O. Reg. 476/24: a public job posting must say if AI screens, assesses or selects applicants.
  *
  * The shape every specialist follows: extractors turn the diff into facts, policies/committee/canada_ai.rego decides.
  * Nothing here judges; it only gathers facts.

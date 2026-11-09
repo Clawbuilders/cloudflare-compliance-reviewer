@@ -24,7 +24,7 @@ async function review(name: string, repoFiles?: Record<string, string>) {
 
 beforeAll(() => ensureRegorus());
 
-describe("canada-ai (Quebec Law 25 s. 12.1, Ontario ESA ss. 8.1-8.6)", () => {
+describe("canada-ai (Quebec Law 25 s. 12.1, Ontario ESA s. 8.4(1))", () => {
   it("is registered with a Clef triage question", () => {
     expect(getSpecialist("canada-ai")?.kind).toBe("HEURISTIC");
     expect(SPECIALIST_QUESTIONS["canada-ai"]).toMatch(/automated decision|hiring/i);
@@ -41,7 +41,7 @@ describe("canada-ai (Quebec Law 25 s. 12.1, Ontario ESA ss. 8.1-8.6)", () => {
     expect(block.citations.join(" ")).toContain("Quebec Law 25, s. 12.1");
     expect(block.message).toContain("flags the code for human review");
     expect(block.file).toBe("src/hiring/screen.ts");
-    expect(warn.citations).toEqual(["Ontario Employment Standards Act, 2000, ss. 8.1-8.6", "O. Reg. 476/24"]);
+    expect(warn.citations).toEqual(["Ontario Employment Standards Act, 2000, s. 8.4(1)", "O. Reg. 476/24"]);
     expect(warn.message).toMatch(/25 or more employees/);
     expect(findings.every((f) => f.kind === "HEURISTIC" && f.specialist === "canada-ai")).toBe(true);
   });

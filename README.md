@@ -62,7 +62,7 @@ from the diff (then judged by real Rego). Both are fallible; the label tells you
 | **AI governance** | AI usage with no declarations file; undisclosed user-facing AI; declared facts that fail [GOPAL](https://github.com/Principled-Evolution/gopal)'s EU AI Act, accountability and NIST AI RMF rules | EU AI Act Art. 13, 50 · NIST AI RMF · whatever the GOPAL rule cites | REAL (on declared facts) |
 | **Sensitive data** | Luhn-valid card numbers and card fields in logs; health identifiers in logs or fixtures | PCI DSS v4.0 3.3.1, 3.5.1 · PHIPA s. 12 | HEURISTIC |
 | **Change control** | CI, infra, auth changes without enough approvals; very large PRs; edits to the committee's own policies without review | SOC 2 CC8.1 | REAL |
-| **Canada AI** | automated decisions about a person with no human review route; AI screening job applicants with no disclosure in the posting | Quebec Law 25 s. 12.1 · Ontario ESA 2000 ss. 8.1-8.6 · O. Reg. 476/24 | HEURISTIC |
+| **Canada AI** | automated decisions about a person with no human review route; AI screening job applicants with no disclosure in the posting | Quebec Law 25 s. 12.1 · Ontario ESA 2000 s. 8.4(1) · O. Reg. 476/24 | HEURISTIC |
 
 Triage can *add* scrutiny but never remove a signal: if a specialist's own check fires, it runs even when Clef said skip.
 Change control involves no model, so it always runs.
@@ -84,7 +84,7 @@ also the worked example of "add your own specialist" (`policies/committee/canada
   rejects, approves, bans, suspends or declines a user, applicant, customer or account from a score, threshold, prediction
   or AI call, nothing in the change routes the decision to a person, and `compliance/ai-system.json` does not declare
   `automated_decisions.notice` and `automated_decisions.human_review`.
-- **Ontario Employment Standards Act, 2000, ss. 8.1-8.6 and O. Reg. 476/24** (in force 2026-01-01). An employer with 25
+- **Ontario Employment Standards Act, 2000, s. 8.4(1) and O. Reg. 476/24** (in force 2026-01-01). An employer with 25
   or more employees must say in a publicly advertised job posting if AI is used to screen, assess or select applicants.
   The specialist **warns** when an AI call appears in a hiring context (applicants, candidates, resumes) and neither a
   job-posting template in the change nor `hiring.ai_screening_disclosure` in the declarations file discloses it. A warning,

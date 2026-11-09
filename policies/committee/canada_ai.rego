@@ -43,7 +43,7 @@ deny contains {
 	not automated_decision_covered
 }
 
-# ---------- Ontario Employment Standards Act, 2000, ss. 8.1-8.6 and O. Reg. 476/24 (in force 2026-01-01) ----------
+# ---------- Ontario Employment Standards Act, 2000, s. 8.4(1) and O. Reg. 476/24 (in force 2026-01-01) ----------
 # Employers with 25 or more employees must say in a publicly advertised job posting if AI is used to screen, assess or
 # select applicants. A warning, not a block: headcount and exemptions cannot be seen in code.
 
@@ -54,7 +54,7 @@ warn contains {
 		"This change uses AI in a hiring context (%s). In Ontario, an employer with 25 or more employees must state in a publicly advertised job posting that AI is used to screen, assess or select applicants. Add the statement to your posting template, or record it as hiring.ai_screening_disclosure in compliance/ai-system.json. Only a warning: the employee threshold and exemptions (internal postings, work performed outside Ontario) cannot be known from code.",
 		[object.get(s, "detail", "")],
 	),
-	"citations": ["Ontario Employment Standards Act, 2000, ss. 8.1-8.6", "O. Reg. 476/24"],
+	"citations": ["Ontario Employment Standards Act, 2000, s. 8.4(1)", "O. Reg. 476/24"],
 	"file": s.file,
 } if {
 	some s in input.ai_screening

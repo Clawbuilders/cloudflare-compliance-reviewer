@@ -48,13 +48,13 @@ test_no_decision_no_finding if {
 	count(canada_ai.deny) == 0 with input as {}
 }
 
-# ---------- Ontario ESA 2000, ss. 8.1-8.6 and O. Reg. 476/24: AI in hiring must be disclosed on job postings ----------
+# ---------- Ontario ESA 2000, s. 8.4(1) and O. Reg. 476/24: AI in hiring must be disclosed on job postings ----------
 
 test_ai_screening_without_disclosure_warns_citing_esa if {
 	w := canada_ai.warn with input as {"ai_screening": screening}
 	"ai_screening_without_disclosure" in rules(w)
 	some f in w
-	"Ontario Employment Standards Act, 2000, ss. 8.1-8.6" in f.citations
+	"Ontario Employment Standards Act, 2000, s. 8.4(1)" in f.citations
 	"O. Reg. 476/24" in f.citations
 	contains(f.message, "25 or more employees")
 }
