@@ -1,6 +1,6 @@
 # Software Developer, Toronto
 
-ClawBuilders Labs is hiring a software developer to build agent tooling on Cloudflare Workers.
+Maple Robotics, a fictional company used in this workshop, is hiring a software developer to build agent tooling on Cloudflare Workers.
 
 ## What you will do
 - Build and ship Workers, Durable Objects and Workflows.
