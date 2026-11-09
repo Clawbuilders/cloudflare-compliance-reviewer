@@ -340,6 +340,22 @@ describe("Canada AI facts", () => {
     expect(extractAutomatedDecisions(d("src/risk.ts", ['const r = await env.AI.run("@cf/x", { prompt });', 'if (r.fraud) account.status = "suspended";']))).toHaveLength(1);
   });
 
+  it("reports the line that decides, not the declaration of the function that does it", () => {
+    const lines = [
+      "const score = Number(out.response);",
+      "if (score < REJECT_BELOW) {",
+      '  await rejectApplicant(applicant.id, "We will not be moving forward.");',
+      "}",
+      "async function rejectApplicant(id: string, message: string): Promise<void> {",
+      "def reject_applicant(applicant_id):",
+    ];
+    expect(extractAutomatedDecisions(d("src/hiring/screen.ts", lines))).toEqual([
+      { file: "src/hiring/screen.ts", detail: 'await rejectApplicant(applicant.id, "We will not be moving forward.");' },
+    ]);
+    // A one-line arrow function decides in its body, so it still counts.
+    expect(extractAutomatedDecisions(d("src/a.ts", ["const gate = (user) => user.score < 0.5 && rejectUser(user.id);"]))).toHaveLength(1);
+  });
+
   it("does not treat a decision with no automated input as automated (an admin clicking Ban is a person deciding)", () => {
     expect(extractAutomatedDecisions(d("src/admin.ts", ["export const onBanClick = (user) => banUser(user.id);"]))).toEqual([]);
   });

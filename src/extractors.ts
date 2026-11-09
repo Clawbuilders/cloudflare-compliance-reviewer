@@ -245,6 +245,8 @@ const PERSON = /user|applicant|candidate|customer|account|member|client|borrower
 const HUMAN_REVIEW = /human[_-]?review|manual[_-]?review|review[_-]?queue|for[_-]?review|needs?[_-]?review|request[_-]?review|reviewer|escalat|appeal/i;
 
 const withoutTrailingComment = (line: string) => line.replace(/\s\/\/.*$/, "").replace(/\/\*.*?\*\//g, " ");
+/** A line that only declares something (`async function rejectApplicant(...)`, `def deny_user(...)`): a name, not a decision. */
+const DECLARATION = /^\s*(export\s+)?(default\s+)?(async\s+)?(function\b|def\s|class\s|interface\s|type\s)/;
 
 /**
  * Lines that decide about a person (reject, approve, ban, suspend...) in a file whose input is automated (a score, a threshold, a
@@ -258,6 +260,7 @@ export function extractAutomatedDecisions(files: DiffFile[]): FactSite[] {
     const automated = extractAiUsage([f]).length > 0 || lines.some((l) => AUTOMATED_SIGNAL.test(l));
     if (!automated) continue;
     for (const line of lines) {
+      if (DECLARATION.test(line)) continue;
       if ((DECISION.test(line) || BAN.test(line)) && PERSON.test(line)) out.push({ file: f.path, detail: clip(line) });
     }
   }
