@@ -16,7 +16,7 @@ Each track lives in its own directory with its own `package.json` and `wrangler.
 | Track | What you build | Deploy |
 |---|---|---|
 | **Starter** — [`starter/`](starter) | The first member of the committee: an accessibility (WCAG 2.2) reviewer. One Agents SDK agent per PR, Clef gates it, Workers AI explains the fixes. | [![Deploy Starter](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Clawbuilders/cloudflare-compliance-reviewer/tree/main/starter) |
-| **Advanced** — this directory | The full committee: six specialists, a shared policy engine, durable workflows, four-eyes waivers, an audit log, and an MCP tool. | [![Deploy Advanced](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Clawbuilders/cloudflare-compliance-reviewer) |
+| **Advanced** — this directory | The full committee: seven specialists, a shared policy engine, durable workflows, four-eyes waivers, an audit log, and an MCP tool. | [![Deploy Advanced](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Clawbuilders/cloudflare-compliance-reviewer) |
 | **Bonus** — [`compliance-preview-auditor`](https://github.com/Clawbuilders/compliance-preview-auditor) | Audit a live PR preview URL with Browser Rendering: axe-core, third-party requests before consent, and screenshots classified by Clef vision. | see its README |
 
 New to Cloudflare Workers? The Starter is the place to begin. The workshop guide is [`docs/workshop-guide.md`](docs/workshop-guide.md).
@@ -62,6 +62,7 @@ from the diff (then judged by real Rego). Both are fallible; the label tells you
 | **AI governance** | AI usage with no declarations file; undisclosed user-facing AI; declared facts that fail [GOPAL](https://github.com/Principled-Evolution/gopal)'s EU AI Act, accountability and NIST AI RMF rules | EU AI Act Art. 13, 50 · NIST AI RMF · whatever the GOPAL rule cites | REAL (on declared facts) |
 | **Sensitive data** | Luhn-valid card numbers and card fields in logs; health identifiers in logs or fixtures | PCI DSS v4.0 3.3.1, 3.5.1 · PHIPA s. 12 | HEURISTIC |
 | **Change control** | CI, infra, auth changes without enough approvals; very large PRs; edits to the committee's own policies without review | SOC 2 CC8.1 | REAL |
+| **Canada AI** | automated decisions about a person with no human review route; AI screening job applicants with no disclosure in the posting | Quebec Law 25 s. 12.1 · Ontario ESA 2000 ss. 8.1-8.6 · O. Reg. 476/24 | HEURISTIC |
 
 Triage can *add* scrutiny but never remove a signal: if a specialist's own check fires, it runs even when Clef said skip.
 Change control involves no model, so it always runs.
@@ -71,9 +72,33 @@ Change control involves no model, so it always runs.
 package's files). ClearlyDefined can be slow or return errors, so every call has a short timeout and a failure falls back to
 deps.dev. If neither answers, the comment says the lookup was unavailable — an outage is never reported as "no license".
 
+### Canada AI
+Canada has no federal AI act: the proposed Artificial Intelligence and Data Act (AIDA) died when Parliament was prorogued
+in January 2025. The binding AI rules today are provincial, and two of them can be checked in code. This specialist is
+also the worked example of "add your own specialist" (`policies/committee/canada_ai.rego`, the Canada AI section of
+`src/extractors.ts`, `src/specialists/canada-ai.ts`).
+
+- **Quebec Law 25, s. 12.1** (Act respecting the protection of personal information in the private sector, in force
+  2023-09-22). A business that makes a decision about a person based exclusively on automated processing must tell the
+  person and, on request, let someone who can change the decision review it. The specialist **blocks** when added code
+  rejects, approves, bans, suspends or declines a user, applicant, customer or account from a score, threshold, prediction
+  or AI call, nothing in the change routes the decision to a person, and `compliance/ai-system.json` does not declare
+  `automated_decisions.notice` and `automated_decisions.human_review`.
+- **Ontario Employment Standards Act, 2000, ss. 8.1-8.6 and O. Reg. 476/24** (in force 2026-01-01). An employer with 25
+  or more employees must say in a publicly advertised job posting if AI is used to screen, assess or select applicants.
+  The specialist **warns** when an AI call appears in a hiring context (applicants, candidates, resumes) and neither a
+  job-posting template in the change nor `hiring.ai_screening_disclosure` in the declarations file discloses it. A warning,
+  not a block: headcount and exemptions (internal postings, work performed outside Ontario) cannot be seen in code.
+
+Both are pattern matches (HEURISTIC) that flag code for a person to review. Evidence that clears a finding (a human-review
+call, a disclosure in a posting) must be code or posting text: comments and string literals elsewhere do not count, so text
+in a diff cannot argue its way out of a finding. Only the changed files and the declarations file are read, not the whole
+repository. Not legal advice.
+
 ### AI governance and the declarations file
 GOPAL judges *declared facts about an AI system*, not source code. Keep a `compliance/ai-system.json` in your repository
-(see [`docs/examples/ai-system.json`](docs/examples/ai-system.json)). GOPAL's own caveat applies, and the comment repeats it:
+(see [`docs/examples/ai-system.json`](docs/examples/ai-system.json); the Canada AI specialist reads its
+`automated_decisions` and `hiring` fields). GOPAL's own caveat applies, and the comment repeats it:
 **a declared value is still an assertion unless an evaluator backs it.**
 
 Which GOPAL packs are included: `helper_functions`, `global` and `international`, vendored unmodified. GOPAL's

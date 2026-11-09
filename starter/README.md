@@ -57,5 +57,5 @@ npm run deploy
 - Events: choose **Let me select individual events**, tick **Pull requests**, and untick anything else.
 
 ## Grow it into a committee
-The [Advanced track](https://github.com/Clawbuilders/cloudflare-compliance-reviewer) keeps this shape and adds five more
+The [Advanced track](https://github.com/Clawbuilders/cloudflare-compliance-reviewer) keeps this shape and adds six more
 specialists, a policy engine, durable workflows, waivers and an audit log.

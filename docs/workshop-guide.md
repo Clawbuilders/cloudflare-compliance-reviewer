@@ -98,8 +98,11 @@ In the repository: **Settings → Webhooks → Add webhook**. Payload URL is you
    A review or an MCP call now returns one blocking "Policy engine unavailable" finding. Put the real pointer back with
    `npm run policies:publish -- --local`.
 9. **Add your own specialist.** A new `.rego` file under `policies/committee/`, an extractor, and an entry in
-   `src/specialists/index.ts`. The registry tests check the six built-ins by name, so they keep passing. Forget to publish
-   the new package and the specialist reports a blocking "policy package missing" finding instead of a silent pass.
+   `src/specialists/index.ts`, plus a Clef triage question in `src/clef.ts`. The Canada AI specialist is the worked
+   example: read `policies/committee/canada_ai.rego` and its `_test.rego`, the Canada AI section of `src/extractors.ts`,
+   `src/specialists/canada-ai.ts` and `test/specialists/canada-ai.test.ts`, in that order. The registry tests check the
+   seven built-ins by name, so a new specialist keeps them passing. Forget to publish the new package and the specialist
+   reports a blocking "policy package missing" finding instead of a silent pass.
 
 ## Part 3 — Bonus: look at the running site
 The [`compliance-preview-auditor`](https://github.com/Clawbuilders/compliance-preview-auditor) repository audits a live
