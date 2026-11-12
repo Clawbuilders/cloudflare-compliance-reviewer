@@ -20,31 +20,75 @@ function defuseProse(s: string): string {
   return s.replace(/@/g, "@​").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\]\(/g, "]​(");
 }
 
-/** A fence opener per CommonMark: up to 3 spaces, then 3+ backticks or tildes. A backtick fence's info string has no backtick. */
-const FENCE_OPEN = /^ {0,3}(`{3,}(?=[^`]*$)|~{3,})/;
+/** A fence after its indentation: 3+ backticks (whose info string has no backtick) or 3+ tildes. */
+const FENCE_OPEN = /^(`{3,}(?=[^`]*$)|~{3,})/;
+/** A list item marker and the spaces after it: its length is the column the item's content starts at. */
+const LIST_ITEM = /^( *)(?:[-*+]|\d{1,9}[.)])( +)(?=\S)/;
 
 /**
- * Model output is untrusted too: no pings, no HTML, no clickable links. Markdown (lists, code fences) is kept.
- * Inside a fenced code block GitHub renders text literally (no HTML, no mentions, no links), so fenced lines are left as
- * they are: escaping them there would show `&lt;Avatar /&gt;` instead of `<Avatar />`. Fences are matched conservatively, so
- * a line that is not a fence to GitHub is never treated as one here.
+ * Inline code spans are literal on GitHub (no HTML, no mentions, no links), so their text is kept as it is and only the
+ * prose around them is defused. A backtick run with no closing run of the same length is not a code span: that line and the
+ * rest of its paragraph are defused whole, so a span GitHub might pair differently is never left unescaped.
+ */
+function defuseLine(line: string, state: { openTick: boolean }): string {
+  if (state.openTick) return defuseProse(line);
+  let out = "";
+  let i = 0;
+  while (i < line.length) {
+    const tick = line.indexOf("`", i);
+    if (tick < 0) {
+      out += defuseProse(line.slice(i));
+      break;
+    }
+    const run = line.slice(tick).match(/^`+/)![0];
+    const close = line.slice(tick + run.length).search(new RegExp(`(?<!\`)${run}(?!\`)`));
+    if (close < 0) {
+      state.openTick = true;
+      return defuseProse(line);
+    }
+    const end = tick + run.length + close + run.length;
+    out += defuseProse(line.slice(i, tick)) + line.slice(tick, end);
+    i = end;
+  }
+  return out;
+}
+
+/**
+ * Model output is untrusted too: no pings, no HTML, no clickable links. Markdown (lists, code) is kept.
+ * Code is literal on GitHub (no HTML, no mentions, no links), so it is left as it is: escaping it would show
+ * `&lt;Avatar /&gt;` instead of `<Avatar />`. That covers fenced blocks, including ones indented inside a list item (the
+ * model often writes "1. Fix ... then a fenced block"), and inline code spans. Fences are matched conservatively: an
+ * indent counts only if it is at most 3 spaces from the margin or from the current list item's content column, so a line
+ * that is not a fence to GitHub is never treated as one here.
  */
 export function defuse(s: string): string {
   let fence: { char: string; len: number } | undefined;
+  let listIndent = 0;
+  const ticks = { openTick: false };
   return s
     .split("\n")
     .map((line) => {
       if (fence) {
-        const close = line.match(/^ {0,3}(`{3,}|~{3,})\s*$/);
+        const close = line.match(/^ *(`{3,}|~{3,})\s*$/);
         if (close && close[1][0] === fence.char && close[1].length >= fence.len) fence = undefined;
         return line;
       }
-      const open = line.match(FENCE_OPEN);
+      if (!line.trim()) {
+        ticks.openTick = false;
+        return line;
+      }
+      const indent = line.match(/^ */)![0].length;
+      const inList = listIndent > 0 && indent >= listIndent && indent - listIndent <= 3;
+      const open = (indent <= 3 || inList) ? line.slice(indent).match(FENCE_OPEN) : null;
       if (open) {
         fence = { char: open[1][0], len: open[1].length };
-        return line.slice(0, open[0].length) + defuseProse(line.slice(open[0].length));
+        const head = indent + open[0].length;
+        return line.slice(0, head) + defuseProse(line.slice(head));
       }
-      return defuseProse(line);
+      const item = line.match(LIST_ITEM);
+      if (item) listIndent = item[0].length;
+      else if (indent === 0) listIndent = 0;
+      return defuseLine(line, ticks);
     })
     .join("\n");
 }

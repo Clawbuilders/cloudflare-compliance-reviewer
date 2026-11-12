@@ -49,4 +49,30 @@ describe("renderA11yComment", () => {
     expect(defuse("``` a`b\n<script>")).not.toContain("<script>");
     expect(defuse("> ```\n<script>")).not.toContain("<script>");
   });
+
+  it("keeps code literal inside list items and inline spans: the model writes fixes as a numbered list", () => {
+    const fixes = [
+      "1. **Input has no label hook.**",
+      "   - Corrected: `<img src=\"/team.jpg\" alt=\"Team\" />`",
+      "   - Corrected:",
+      "     ```jsx",
+      "     <label htmlFor=\"name\">Name</label>",
+      "     ```",
+      "   - Then <b>check</b> @everyone",
+    ].join("\n");
+    const out = defuse(fixes);
+    expect(out).toContain('`<img src="/team.jpg" alt="Team" />`');
+    expect(out).toContain('     <label htmlFor="name">Name</label>');
+    expect(out).toContain("&lt;b&gt;check&lt;/b&gt;");
+    expect(out).not.toMatch(/@everyone/);
+  });
+
+  it("does not trust a code span it cannot close, or one GitHub could pair differently", () => {
+    expect(defuse("a `b <script>")).toBe("a `b &lt;script&gt;");
+    // An unclosed run escapes the rest of the paragraph too, until a blank line.
+    expect(defuse("a `b\n<x>` and `<y>`")).toBe("a `b\n&lt;x&gt;` and `&lt;y&gt;`");
+    expect(defuse("a `b\n\n`<y>`")).toBe("a `b\n\n`<y>`");
+    // A fence indented past a list item's content column is not a fence.
+    expect(defuse("- item\n        ```\n<script>")).toContain("&lt;script&gt;");
+  });
 });
