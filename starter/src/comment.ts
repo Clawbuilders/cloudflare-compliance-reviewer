@@ -103,7 +103,7 @@ export function renderA11yComment(flags: A11yFlag[], suggestions: string): strin
     for (const f of flags) byCriterion.set(f.wcag, [...(byCriterion.get(f.wcag) ?? []), f]);
     for (const [sc, group] of byCriterion) {
       lines.push(`### WCAG ${sc} — ${CRITERIA[sc] ?? "Success Criterion"} (Level ${group[0].level})`);
-      for (const f of group) lines.push(`- ${code(f.file)} — ${f.message}`, `  ${code(f.snippet)}`);
+      for (const f of group) lines.push(`- ${code(f.file)} — ${defuseProse(f.message)}`, `  ${code(f.snippet)}`);
       lines.push("");
     }
   }

@@ -75,4 +75,9 @@ describe("renderA11yComment", () => {
     // A fence indented past a list item's content column is not a fence.
     expect(defuse("- item\n        ```\n<script>")).toContain("&lt;script&gt;");
   });
+
+  it("escapes the rule message, so GitHub shows <label for> instead of dropping it as HTML", () => {
+    const md = renderA11yComment([{ ...flag, message: "Add an id with a matching <label for>, or an aria-label." }], "");
+    expect(md).toContain("matching &lt;label for&gt;, or");
+  });
 });
