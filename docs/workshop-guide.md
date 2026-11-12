@@ -7,7 +7,7 @@ Work through the Starter first; the Advanced track grows the same idea. Each ste
 ## Before you start
 - A free [Cloudflare account](https://dash.cloudflare.com/sign-up) and Node.js 22 or newer (wrangler needs 22).
 - A GitHub repository you can add a webhook to (a throwaway is fine) and a fine-grained personal access token limited to
-  that one repository. Starter: *Pull requests: read* and *Issues: read and write*. Advanced: the same plus *Contents: read*.
+  that one repository. Starter: *Pull requests: read and write* and *Issues: read and write* (commenting on a pull request needs pull request write access, or GitHub answers 403). Advanced: the same plus *Contents: read*.
 - Any coding agent is welcome: Claude Code, Codex, Gemini CLI, Cursor, OpenCode, Hermes or any agent. Ask it to explain a
   file; do not ask it to skip the tests.
 

@@ -4,7 +4,7 @@
 # The secret you typed into the GitHub webhook. Not needed with --var DRY_RUN:true.
 GITHUB_WEBHOOK_SECRET=
 
-# Fine-grained token limited to one repository: Contents (read), Pull requests (read), Issues (read and write).
+# Fine-grained token limited to one repository: Contents (read), Pull requests (read and write), Issues (read and write).
 # Even for local dry runs, a token here avoids GitHub's anonymous rate limit (60 requests an hour) when fetching PR diffs.
 GITHUB_TOKEN=
 

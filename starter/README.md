@@ -48,7 +48,7 @@ npm run deploy
 ```
 
 **The token.** Create a fine-grained personal access token limited to the one repository you are reviewing, with
-**Pull requests: read** and **Issues: read and write** (the review is posted as an issue comment).
+**Pull requests: read and write** and **Issues: read and write**. The review is posted as a comment on the pull request, and GitHub refuses that (403 "Resource not accessible by personal access token") without pull request write access.
 
 **The webhook.** In that repository: **Settings → Webhooks → Add webhook**.
 - Payload URL: your Worker URL, which looks like `https://<worker-name>.<your-subdomain>.workers.dev/`.

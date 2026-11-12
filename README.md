@@ -170,7 +170,7 @@ npm run deploy
 ```
 
 **The token.** Create a fine-grained personal access token limited to the one repository you are reviewing, with
-**Contents: read**, **Pull requests: read** and **Issues: read and write**.
+**Contents: read**, **Pull requests: read and write** and **Issues: read and write**. GitHub refuses a comment on a pull request (403 "Resource not accessible by personal access token") unless the token can write pull requests.
 Prefer a GitHub App? Set `GITHUB_APP_ID` and `GITHUB_APP_PRIVATE_KEY` (PKCS#8; see `src/github.ts`) instead of the token.
 
 **The webhook.** In that repository: **Settings → Webhooks → Add webhook**.
